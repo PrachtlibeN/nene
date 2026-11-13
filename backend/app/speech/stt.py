@@ -36,8 +36,6 @@ ACCEPTED_AUDIO_TYPES: frozenset[str] = frozenset(
         "audio/wav",
         "audio/mp4",
         "audio/mpeg",
-        "audio/x-wav",
-        "audio/wave",
     }
 )
 
@@ -79,15 +77,10 @@ class FasterWhisperEngine:
     ) -> None:
         settings = get_settings()
 
-        env_model = os.environ.get("WHISPER_MODEL")
-        if model_name:
+        if model_name is not None:
             self.model_name = model_name
-        elif env_model:
-            self.model_name = env_model
-        elif settings.whisper_model and settings.whisper_model != "unconfigured":
-            self.model_name = settings.whisper_model
         else:
-            self.model_name = "small"
+            self.model_name = settings.whisper_model
 
         env_device = os.environ.get("WHISPER_DEVICE")
         if device:

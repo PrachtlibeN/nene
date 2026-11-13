@@ -37,8 +37,6 @@ def get_speech_status(
         stt_status_val = "loading"
 
     model_name = str(status_info.get("model") or app_settings.whisper_model)
-    if model_name == "unconfigured":
-        model_name = "small"
 
     return SpeechStatusOut(
         stt=STTStatus(

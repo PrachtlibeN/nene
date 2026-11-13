@@ -11,6 +11,7 @@ from app.core.config import Settings
 from app.main import create_app
 from app.speech.interfaces import FakeSpeechEngine, SpeechSegment
 from app.speech.stt import (
+    ACCEPTED_AUDIO_TYPES,
     FasterWhisperEngine,
     reset_speech_engine,
     set_speech_engine,
@@ -64,7 +65,14 @@ def test_speech_status_returns_contract_shape() -> None:
     assert data["tts"] == {"mode": "browser", "server_side": False}
     assert data["limits"]["max_audio_seconds"] == 120
     assert data["limits"]["max_audio_mb"] == 10
-    assert "audio/wav" in data["limits"]["accepted_types"]
+    assert set(data["limits"]["accepted_types"]) == {
+        "audio/webm",
+        "audio/ogg",
+        "audio/wav",
+        "audio/mp4",
+        "audio/mpeg",
+    }
+    assert ACCEPTED_AUDIO_TYPES == frozenset(data["limits"]["accepted_types"])
 
 
 def test_speech_status_reports_loading_when_not_ready() -> None:
