@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from app.core.config import LLMProfile
 
@@ -22,8 +22,17 @@ class LLMResult:
     latency_ms: int
 
 
+@dataclass(frozen=True)
+class LLMHealth:
+    status: Literal["ok", "unavailable"]
+    models: dict[str, str]
+    detail: str | None = None
+
+
 class LLMClient(Protocol):
     def model_for(self, profile: LLMProfile) -> str: ...
+
+    def health(self) -> LLMHealth: ...
 
     def chat(
         self,
