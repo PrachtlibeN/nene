@@ -1,8 +1,14 @@
-from typing import NoReturn
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Annotated, cast
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, FastAPI, Query, Request
+from sqlalchemy.orm import sessionmaker
 
-from app.core.errors import API_ERROR_RESPONSES, AppError, ErrorCode
+from app.core.config import Settings
+from app.core.db import build_engine
+from app.core.errors import API_ERROR_RESPONSES
+from app.roleplay.interfaces import RoleplayAgent, StubRoleplayAgent
 from app.schemas.contracts import (
     EmptyRequest,
     ScenarioListOut,
@@ -16,21 +22,51 @@ from app.schemas.contracts import (
     TurnListOut,
     TurnSubmitOut,
 )
+from app.simulation.service import SimulationService
 
-router = APIRouter(tags=["simulation"], responses=API_ERROR_RESPONSES)
+
+@asynccontextmanager
+async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+    settings = cast(Settings, application.state.settings)
+    service = getattr(application.state, "simulation_service", None)
+    engine = None
+    if service is None:
+        engine = build_engine(settings.echorole_db_url)
+        factory = sessionmaker(bind=engine, expire_on_commit=False)
+        agent = cast(
+            RoleplayAgent,
+            getattr(application.state, "roleplay_agent", StubRoleplayAgent()),
+        )
+        service = SimulationService(
+            session_factory=factory,
+            settings=settings,
+            agent=agent,
+            clock=getattr(application.state, "simulation_clock", None),
+        )
+        application.state.simulation_service = service
+    try:
+        service.seed_scenarios()
+        service.sweep_idle_sessions()
+        yield
+    finally:
+        if engine is not None:
+            engine.dispose()
+            application.state.simulation_service = None
 
 
-def _not_implemented() -> NoReturn:
-    raise AppError(
-        ErrorCode.NOT_IMPLEMENTED,
-        "This endpoint is not implemented yet.",
-        501,
-    )
+router = APIRouter(tags=["simulation"], responses=API_ERROR_RESPONSES, lifespan=lifespan)
+
+
+def _service(request: Request) -> SimulationService:
+    return cast(SimulationService, request.app.state.simulation_service)
+
+
+ServiceDep = Annotated[SimulationService, Depends(_service)]
 
 
 @router.get("/scenarios", response_model=ScenarioListOut, operation_id="listScenarios")
-def list_scenarios() -> ScenarioListOut:
-    _not_implemented()
+def list_scenarios(service: ServiceDep) -> ScenarioListOut:
+    return service.list_scenarios()
 
 
 @router.get(
@@ -38,8 +74,11 @@ def list_scenarios() -> ScenarioListOut:
     response_model=ScenarioOut,
     operation_id="getScenario",
 )
-def get_scenario(scenario_id: str) -> ScenarioOut:
-    _not_implemented()
+def get_scenario(
+    scenario_id: str,
+    service: ServiceDep,
+) -> ScenarioOut:
+    return service.get_scenario(scenario_id)
 
 
 @router.post(
@@ -48,17 +87,21 @@ def get_scenario(scenario_id: str) -> ScenarioOut:
     status_code=201,
     operation_id="createSession",
 )
-def create_session(payload: SessionCreateIn) -> SessionOut:
-    _not_implemented()
+def create_session(
+    payload: SessionCreateIn,
+    service: ServiceDep,
+) -> SessionOut:
+    return service.create_session(payload.scenario_id)
 
 
 @router.get("/sessions", response_model=SessionListOut, operation_id="listSessions")
 def list_sessions(
+    service: ServiceDep,
     status: SessionStatus | None = None,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> SessionListOut:
-    _not_implemented()
+    return service.list_sessions(status, limit, offset)
 
 
 @router.get(
@@ -66,8 +109,11 @@ def list_sessions(
     response_model=SessionOut,
     operation_id="getSession",
 )
-def get_session(session_id: str) -> SessionOut:
-    _not_implemented()
+def get_session(
+    session_id: str,
+    service: ServiceDep,
+) -> SessionOut:
+    return service.get_session(session_id)
 
 
 @router.post(
@@ -75,8 +121,13 @@ def get_session(session_id: str) -> SessionOut:
     response_model=StartSessionOut,
     operation_id="startSession",
 )
-def start_session(session_id: str, payload: EmptyRequest) -> StartSessionOut:
-    _not_implemented()
+def start_session(
+    session_id: str,
+    payload: EmptyRequest,
+    service: ServiceDep,
+) -> StartSessionOut:
+    del payload
+    return service.start_session(session_id)
 
 
 @router.post(
@@ -84,8 +135,12 @@ def start_session(session_id: str, payload: EmptyRequest) -> StartSessionOut:
     response_model=TurnSubmitOut,
     operation_id="submitTurn",
 )
-def submit_turn(session_id: str, payload: TurnCreateIn) -> TurnSubmitOut:
-    _not_implemented()
+def submit_turn(
+    session_id: str,
+    payload: TurnCreateIn,
+    service: ServiceDep,
+) -> TurnSubmitOut:
+    return service.submit_turn(session_id, payload)
 
 
 @router.get(
@@ -93,8 +148,11 @@ def submit_turn(session_id: str, payload: TurnCreateIn) -> TurnSubmitOut:
     response_model=TurnListOut,
     operation_id="listTurns",
 )
-def list_turns(session_id: str) -> TurnListOut:
-    _not_implemented()
+def list_turns(
+    session_id: str,
+    service: ServiceDep,
+) -> TurnListOut:
+    return service.list_turns(session_id)
 
 
 @router.post(
@@ -102,5 +160,10 @@ def list_turns(session_id: str) -> TurnListOut:
     response_model=SessionOut,
     operation_id="endSession",
 )
-def end_session(session_id: str, payload: EmptyRequest) -> SessionOut:
-    _not_implemented()
+def end_session(
+    session_id: str,
+    payload: EmptyRequest,
+    service: ServiceDep,
+) -> SessionOut:
+    del payload
+    return service.end_session(session_id)
