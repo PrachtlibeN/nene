@@ -61,6 +61,7 @@ BAND_DESCRIPTIONS = {
         "Accurate, varied, professional language",
     ),
 }
+RUBRIC_DESCRIPTIONS = BAND_DESCRIPTIONS
 
 
 def compute_overall_score(criteria: list[CriterionScoreIn]) -> int:
