@@ -457,7 +457,11 @@ export const SessionView: React.FC<SessionViewProps> = ({
           {/* Typed Fallback Input */}
           <TypedInputFallback
             isMicDenied={isMicDenied}
-            isDisabled={state === "waiting_reply" || state === "speaking"}
+            isDisabled={
+              state === "transcribing" ||
+              state === "waiting_reply" ||
+              state === "speaking"
+            }
             isSending={state === "sending"}
             onSendTyped={handleSendTyped}
           />

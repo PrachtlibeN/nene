@@ -142,6 +142,46 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
     });
   });
 
+  it("disables typed fallback while speech is transcribing", async () => {
+    let resolveRecording: (blob: Blob) => void = () => {};
+    const mockRecordAudio = vi.fn(
+      () =>
+        new Promise<Blob>((resolve) => {
+          resolveRecording = resolve;
+        }),
+    );
+
+    render(
+      <SessionView
+        initialSession={sessionExample}
+        scenario={scenarioExample}
+        initialTurn={null}
+        onViewFeedback={vi.fn()}
+        onMockRecordAudio={mockRecordAudio}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /click to toggle/i }));
+    fireEvent.click(screen.getByRole("button", { name: /push to talk/i }));
+    fireEvent.click(screen.getByRole("button", { name: /stop recording/i }));
+
+    const input = screen.getByLabelText(/or type response/i);
+    const sendButton = screen.getByRole("button", { name: /send typed answer/i });
+    await waitFor(() => {
+      expect(input).toBeDisabled();
+      expect(sendButton).toBeDisabled();
+    });
+
+    resolveRecording(
+      new Blob(["dummy voice data"], { type: "audio/webm" }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByText(/review your spoken response \(no auto-send\)/i),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("auto-stops recording when reaching max_audio_seconds", async () => {
     vi.useFakeTimers();
     const mockRecordAudio = vi.fn().mockResolvedValue(
