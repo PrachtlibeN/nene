@@ -53,9 +53,11 @@ def get_simulation_service(
         return cast(SimulationService, service)
     clock = getattr(request.app.state, "evaluation_clock", utc_now)
     from app.simulation.service import SimulationService as DefaultSimulationService
+    from sqlalchemy.orm import sessionmaker
 
+    session_factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
     return DefaultSimulationService(
-        db=db,
+        session_factory=session_factory,
         settings=request.app.state.settings,
         clock=clock,
     )

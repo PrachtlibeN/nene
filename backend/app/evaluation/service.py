@@ -75,7 +75,7 @@ class EvaluationService:
             from app.simulation.service import SimulationService as DefaultSimulationService
 
             simulation = DefaultSimulationService(
-                db=db,
+                session_factory=self.session_factory,
                 settings=settings,
                 clock=self.clock,
             )

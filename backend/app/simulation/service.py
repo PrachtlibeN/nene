@@ -516,20 +516,22 @@ class SimulationService:
     def _load_single_session(self, db: DBSession, session_id: str) -> Session:
         now = self.clock()
         cutoff = _timestamp(now - timedelta(minutes=self.settings.session_idle_timeout_minutes))
-        db.execute(
-            update(Session)
-            .where(
-                Session.id == session_id,
-                Session.status == SessionStatus.ACTIVE.value,
-                Session.in_flight == 0,
-                Session.last_activity_at < cutoff,
-            )
-            .values(
-                status=SessionStatus.ABANDONED.value,
-                end_reason=EndReason.TIMEOUT.value,
-                ended_at=Session.last_activity_at,
-            )
-        )
+        with self.session_factory() as sweep_db:
+            with sweep_db.begin():
+                sweep_db.execute(
+                    update(Session)
+                    .where(
+                        Session.id == session_id,
+                        Session.status == SessionStatus.ACTIVE.value,
+                        Session.in_flight == 0,
+                        Session.last_activity_at < cutoff,
+                    )
+                    .values(
+                        status=SessionStatus.ABANDONED.value,
+                        end_reason=EndReason.TIMEOUT.value,
+                        ended_at=Session.last_activity_at,
+                    )
+                )
         session = self.repository.get_session(db, session_id)
         if session is None:
             raise _session_not_found(session_id)

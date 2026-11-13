@@ -89,6 +89,7 @@ def evaluation_env(
     app = create_app(settings)
     clock = FrozenClock()
     app.state.evaluation_clock = clock
+    app.state.simulation_clock = clock
 
     def override_db() -> Iterator[DBSession]:
         with factory() as db:
