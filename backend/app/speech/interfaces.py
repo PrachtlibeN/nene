@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.core.errors import AppError, ErrorCode
+
 
 @dataclass(frozen=True)
 class SpeechSegment:
@@ -30,16 +32,77 @@ class SpeechEngine(Protocol):
 
 
 class FakeSpeechEngine:
+    def __init__(
+        self,
+        ready: bool = True,
+        text: str = "A candidate response.",
+        duration_ms: int = 1000,
+        avg_confidence: float | None = 0.91,
+        segments: list[SpeechSegment] | None = None,
+        model: str = "configured",
+        device: str = "cpu",
+        engine: str = "faster-whisper",
+        should_fail_not_ready: bool = False,
+        should_fail_empty_or_silent: bool = False,
+        should_fail_too_long: bool = False,
+        should_fail_unsupported: bool = False,
+    ) -> None:
+        self.ready = ready
+        self.text = text
+        self.duration_ms = duration_ms
+        self.avg_confidence = avg_confidence
+        self.segments = segments or [
+            SpeechSegment(0, duration_ms, text, avg_confidence)
+        ]
+        self.model = model
+        self.device = device
+        self.engine = engine
+        self.should_fail_not_ready = should_fail_not_ready
+        self.should_fail_empty_or_silent = should_fail_empty_or_silent
+        self.should_fail_too_long = should_fail_too_long
+        self.should_fail_unsupported = should_fail_unsupported
+
     def transcribe(self, audio: bytes, content_type: str) -> Transcription:
+        if not self.ready or self.should_fail_not_ready:
+            raise AppError(
+                ErrorCode.STT_NOT_READY,
+                "Speech engine is still loading.",
+                503,
+            )
+        if self.should_fail_unsupported:
+            raise AppError(
+                ErrorCode.AUDIO_UNSUPPORTED_FORMAT,
+                "Audio format is unsupported or corrupt.",
+                415,
+            )
+        if self.should_fail_too_long:
+            raise AppError(
+                ErrorCode.AUDIO_TOO_LONG,
+                "Audio duration exceeds limit.",
+                422,
+            )
+        if self.should_fail_empty_or_silent or not self.text.strip():
+            raise AppError(
+                ErrorCode.AUDIO_EMPTY_OR_SILENT,
+                "No speech detected in audio.",
+                422,
+            )
+        words = self.text.split()
         return Transcription(
-            text="A candidate response.",
+            text=self.text,
             language="en",
-            duration_ms=1000,
-            avg_confidence=None,
-            word_count=3,
-            processing_ms=0,
-            segments=[SpeechSegment(0, 1000, "A candidate response.", None)],
+            duration_ms=self.duration_ms,
+            avg_confidence=self.avg_confidence,
+            word_count=len(words),
+            processing_ms=10,
+            segments=self.segments,
         )
 
     def status(self) -> dict[str, object]:
-        return {"status": "loading"}
+        return {
+            "status": "ready" if self.ready else "loading",
+            "engine": self.engine,
+            "model": self.model,
+            "device": self.device,
+            "language": "en",
+        }
