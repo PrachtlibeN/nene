@@ -1,7 +1,7 @@
 from collections import deque
 
 from app.core.config import LLMProfile, Settings
-from app.llm.interfaces import LLMMessage, LLMResult
+from app.llm.interfaces import LLMHealth, LLMMessage, LLMResult
 
 
 class FakeLLMClient:
@@ -16,6 +16,15 @@ class FakeLLMClient:
 
     def model_for(self, profile: LLMProfile) -> str:
         return self.settings.model_for(profile)
+
+    def health(self) -> LLMHealth:
+        return LLMHealth(
+            status="ok",
+            models={
+                "roleplay": self.model_for(LLMProfile.ROLEPLAY),
+                "evaluation": self.model_for(LLMProfile.EVALUATION),
+            },
+        )
 
     def chat(
         self,
