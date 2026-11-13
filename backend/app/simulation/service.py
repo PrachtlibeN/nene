@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal, TypeVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy.orm import sessionmaker
@@ -42,6 +42,7 @@ from app.schemas.contracts import (
     TurnSource,
     TurnSubmitOut,
 )
+from app.simulation.repository import SimulationRepository
 
 logger = logging.getLogger(__name__)
 ScenarioSessionFactory = sessionmaker[DBSession]
@@ -78,6 +79,7 @@ class SimulationService:
         scenario_dir: Path | None = None,
     ) -> None:
         self.session_factory = session_factory
+        self.repository = SimulationRepository(session_factory)
         self.settings = settings
         self.agent = agent or StubRoleplayAgent()
         self.clock = clock or (lambda: datetime.now(UTC))
@@ -86,9 +88,8 @@ class SimulationService:
 
     @contextmanager
     def _transaction(self) -> Iterator[DBSession]:
-        with self.session_factory() as db:
-            with db.begin():
-                yield db
+        with self.repository.transaction() as db:
+            yield db
 
     def seed_scenarios(self) -> None:
         seeds = [
@@ -102,7 +103,7 @@ class SimulationService:
         with self._transaction() as db:
             for seed in seeds:
                 self._estimated_minutes[seed.slug] = seed.estimated_minutes
-                scenario = db.scalar(select(Scenario).where(Scenario.slug == seed.slug))
+                scenario = self.repository.get_scenario_by_slug(db, seed.slug)
                 if scenario is None:
                     scenario = Scenario(
                         id=new_id("scn_"),
@@ -150,13 +151,13 @@ class SimulationService:
 
     def list_scenarios(self) -> ScenarioListOut:
         with self.session_factory() as db:
-            scenarios = db.scalars(select(Scenario).order_by(Scenario.slug)).all()
+            scenarios = self.repository.list_scenarios(db)
             items = [self._scenario_summary(scenario) for scenario in scenarios]
         return ScenarioListOut(items=items, total=len(items))
 
     def get_scenario(self, scenario_id: str) -> ScenarioOut:
         with self.session_factory() as db:
-            scenario = db.get(Scenario, scenario_id)
+            scenario = self.repository.get_scenario(db, scenario_id)
             if scenario is None:
                 raise AppError(
                     ErrorCode.SCENARIO_NOT_FOUND,
@@ -169,7 +170,7 @@ class SimulationService:
     def create_session(self, scenario_id: str) -> SessionOut:
         now = _timestamp(self.clock())
         with self._transaction() as db:
-            scenario = db.get(Scenario, scenario_id)
+            scenario = self.repository.get_scenario(db, scenario_id)
             if scenario is None:
                 raise AppError(
                     ErrorCode.SCENARIO_NOT_FOUND,
@@ -211,15 +212,12 @@ class SimulationService:
     ) -> SessionListOut:
         self.sweep_idle_sessions()
         with self.session_factory() as db:
-            query = select(Session)
-            count_query = select(func.count()).select_from(Session)
-            if status is not None:
-                query = query.where(Session.status == status.value)
-                count_query = count_query.where(Session.status == status.value)
-            total = db.scalar(count_query) or 0
-            sessions = db.scalars(
-                query.order_by(Session.created_at.desc(), Session.id).limit(limit).offset(offset)
-            ).all()
+            sessions, total = self.repository.list_sessions(
+                db,
+                status.value if status is not None else None,
+                limit,
+                offset,
+            )
             items = [self._session_out(db, session) for session in sessions]
         return SessionListOut(items=items, total=total, limit=limit, offset=offset)
 
@@ -234,7 +232,7 @@ class SimulationService:
             session = self._load_single_session(db, session_id)
             if session.status != SessionStatus.CREATED.value:
                 raise _invalid_state(session_id, session.status, ["created"])
-            scenario = db.get(Scenario, session.scenario_id)
+            scenario = self.repository.get_scenario(db, session.scenario_id)
             conversation = self._roleplay_conversation(db, session_id)
             scenario_out = self._scenario_out(_required(scenario, "Scenario not found"))
             conversation_id = conversation.id
@@ -253,7 +251,7 @@ class SimulationService:
         _validate_reply(reply)
         now = _timestamp(self.clock())
         with self._transaction() as db:
-            starting_session = db.get(Session, session_id)
+            starting_session = self.repository.get_session(db, session_id)
             if starting_session is None:
                 raise _session_not_found(session_id)
             if starting_session.status != SessionStatus.CREATED.value:
@@ -317,23 +315,25 @@ class SimulationService:
                 ),
             )
             if result.rowcount != 1:
-                current = db.get(Session, session_id)
+                current = self.repository.get_session(db, session_id)
                 if current is None:
                     raise _session_not_found(session_id)
                 if current.status != SessionStatus.ACTIVE.value:
                     raise _not_active(session_id, current.status)
                 raise _turn_in_progress(session_id)
 
-            session = _required(db.get(Session, session_id), "Session not found")
+            session = _required(
+                self.repository.get_session(db, session_id),
+                "Session not found",
+            )
             scenario = self._scenario_out(
-                _required(db.get(Scenario, session.scenario_id), "Scenario not found")
+                _required(
+                    self.repository.get_scenario(db, session.scenario_id),
+                    "Scenario not found",
+                )
             )
             conversation = self._roleplay_conversation(db, session_id)
-            messages = db.scalars(
-                select(Message)
-                .where(Message.conversation_id == conversation.id)
-                .order_by(Message.seq)
-            ).all()
+            messages = self.repository.list_messages(db, conversation.id)
             history = [
                 _llm_message(message.role, message.content) for message in messages
             ]
@@ -367,9 +367,7 @@ class SimulationService:
     def list_turns(self, session_id: str) -> TurnListOut:
         with self._transaction() as db:
             self._load_single_session(db, session_id)
-            turns = db.scalars(
-                select(Turn).where(Turn.session_id == session_id).order_by(Turn.idx)
-            ).all()
+            turns = self.repository.list_turns(db, session_id)
             return TurnListOut(session_id=session_id, items=[_turn_out(turn) for turn in turns])
 
     def end_session(self, session_id: str) -> SessionOut:
@@ -404,10 +402,11 @@ class SimulationService:
     def get_transcript(self, session_id: str) -> Transcript:
         with self._transaction() as db:
             session = self._load_single_session(db, session_id)
-            scenario = _required(db.get(Scenario, session.scenario_id), "Scenario not found")
-            turns = db.scalars(
-                select(Turn).where(Turn.session_id == session_id).order_by(Turn.idx)
-            ).all()
+            scenario = _required(
+                self.repository.get_scenario(db, session.scenario_id),
+                "Scenario not found",
+            )
+            turns = self.repository.list_turns(db, session_id)
             return Transcript(
                 session=self._session_out(db, session),
                 scenario=self._scenario_out(scenario),
@@ -424,7 +423,7 @@ class SimulationService:
         accepted_at: str,
     ) -> TurnSubmitOut:
         with self._transaction() as db:
-            session = db.get(Session, session_id)
+            session = self.repository.get_session(db, session_id)
             if session is None:
                 raise _session_not_found(session_id)
             if session.status != SessionStatus.ACTIVE.value:
@@ -432,9 +431,7 @@ class SimulationService:
             if not session.in_flight:
                 raise _turn_in_progress(session_id)
 
-            existing_turn_count = db.scalar(
-                select(func.count()).select_from(Turn).where(Turn.session_id == session_id)
-            ) or 0
+            existing_turn_count = self.repository.count_turns(db, session_id)
             now = _timestamp(self.clock())
             candidate_turn = Turn(
                 id=new_id("trn_"),
@@ -464,11 +461,7 @@ class SimulationService:
             )
             db.add_all([candidate_turn, interviewer_turn])
 
-            next_seq = db.scalar(
-                select(func.count()).select_from(Message).where(
-                    Message.conversation_id == conversation_id
-                )
-            ) or 0
+            next_seq = self.repository.count_messages(db, conversation_id)
             db.add_all(
                 [
                     Message(
@@ -537,7 +530,7 @@ class SimulationService:
                 ended_at=Session.last_activity_at,
             )
         )
-        session = db.get(Session, session_id)
+        session = self.repository.get_session(db, session_id)
         if session is None:
             raise _session_not_found(session_id)
         return session
@@ -563,14 +556,8 @@ class SimulationService:
             definition=ScenarioDefinition.model_validate_json(scenario.definition_json),
         )
 
-    @staticmethod
-    def _roleplay_conversation(db: DBSession, session_id: str) -> Conversation:
-        conversation = db.scalar(
-            select(Conversation).where(
-                Conversation.session_id == session_id,
-                Conversation.agent_role == "roleplay",
-            )
-        )
+    def _roleplay_conversation(self, db: DBSession, session_id: str) -> Conversation:
+        conversation = self.repository.get_roleplay_conversation(db, session_id)
         if conversation is None:
             raise RuntimeError(f"Roleplay conversation missing for session {session_id}.")
         return conversation
@@ -594,9 +581,8 @@ class SimulationService:
             ),
         )
 
-    @staticmethod
-    def _scenario_max_turns(db: DBSession, scenario_id: str) -> int:
-        scenario = db.get(Scenario, scenario_id)
+    def _scenario_max_turns(self, db: DBSession, scenario_id: str) -> int:
+        scenario = self.repository.get_scenario(db, scenario_id)
         if scenario is None:
             raise RuntimeError(f"Scenario {scenario_id} is missing.")
         return scenario.max_turns
