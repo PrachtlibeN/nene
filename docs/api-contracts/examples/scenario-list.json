@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "id": "scn_a1b2c3",
+      "slug": "job-interview-behavioral",
+      "title": "Behavioral Job Interview",
+      "description": "Answer tough behavioral questions from a skeptical hiring manager.",
+      "language": "en",
+      "difficulty": 2,
+      "max_turns": 8,
+      "estimated_minutes": 10
+    }
+  ],
+  "total": 1
+}
