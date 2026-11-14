@@ -11,6 +11,17 @@ interface FeedbackViewProps {
   pollIntervalMs?: number;
 }
 
+async function startOrLoadEvaluation(sessionId: string): Promise<EvaluationOut> {
+  try {
+    return await api.startEvaluation(sessionId);
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "EVALUATION_IN_PROGRESS") {
+      return api.getEvaluation(sessionId);
+    }
+    throw error;
+  }
+}
+
 export const FeedbackView: React.FC<FeedbackViewProps> = ({
   sessionId,
   onBackToScenarios,
@@ -61,8 +72,7 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
         initial = await api.getEvaluation(sessionId);
       } catch (err) {
         if (err instanceof ApiError && (err.status === 404 || err.code === "EVALUATION_NOT_FOUND")) {
-          // If no evaluation exists yet, start one (POST 202)
-          initial = await api.startEvaluation(sessionId);
+          initial = await startOrLoadEvaluation(sessionId);
         } else {
           throw err;
         }
@@ -94,7 +104,7 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
     setError(null);
     setIsPolling(true);
     try {
-      const restarted = await api.startEvaluation(sessionId);
+      const restarted = await startOrLoadEvaluation(sessionId);
       setEvaluation(restarted);
       startPolling();
     } catch (err) {

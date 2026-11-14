@@ -109,6 +109,56 @@ describe("FeedbackView - 2-Panel Layout & 2s Polling", () => {
     });
   });
 
+  it("loads the existing evaluation when a concurrent start request wins", async () => {
+    let getAttempts = 0;
+    server.use(
+      http.get("*/api/v1/sessions/:session_id/evaluation", () => {
+        getAttempts++;
+        if (getAttempts === 1) {
+          return HttpResponse.json(
+            {
+              error: {
+                code: "EVALUATION_NOT_FOUND",
+                message: "No evaluation exists.",
+                details: null,
+                request_id: "req_test",
+              },
+            },
+            { status: 404 },
+          );
+        }
+        return HttpResponse.json({ ...evaluationExample, status: "running" });
+      }),
+      http.post("*/api/v1/sessions/:session_id/evaluation", () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: "EVALUATION_IN_PROGRESS",
+              message: "An evaluation is already in progress.",
+              details: null,
+              request_id: "req_test",
+            },
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    render(
+      <FeedbackView
+        sessionId="ses_9c1f40"
+        onBackToScenarios={vi.fn()}
+        pollIntervalMs={100}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/status: running/i)).toBeInTheDocument();
+      expect(getAttempts).toBeGreaterThanOrEqual(2);
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("handles failed evaluation state and allows retry", async () => {
     let hasRetried = false;
 
