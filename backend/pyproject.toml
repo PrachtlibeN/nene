@@ -38,7 +38,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q -m 'not llm and not stt'"
 markers = [
     "llm: opt-in tests requiring a local LLM",
     "stt: opt-in tests requiring a local speech model",

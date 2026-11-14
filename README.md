@@ -92,6 +92,10 @@ python -m mypy app
 python -m pytest
 ```
 
+The default pytest run excludes tests marked `llm` or `stt`; those require
+separately configured local services/models. Run an opt-in group explicitly
+with `python -m pytest -m stt` or `python -m pytest -m llm`.
+
 From `frontend/`:
 
 ```powershell
