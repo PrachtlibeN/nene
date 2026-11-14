@@ -21,7 +21,7 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: ruff check app tests tools
       - run: mypy app tools/export_openapi.py
-      - run: pytest
+      - run: python -m pytest
         env:
           OLLAMA_MODEL: ci-test-model
 

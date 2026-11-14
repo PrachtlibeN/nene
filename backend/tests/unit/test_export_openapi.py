@@ -1,6 +1,6 @@
 from typing import Any
 
-from tools.export_openapi import normalize_openapi_status_descriptions
+from app.core.openapi import normalize_openapi_status_descriptions
 
 
 def test_normalize_openapi_status_descriptions() -> None:
