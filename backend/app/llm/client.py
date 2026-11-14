@@ -174,11 +174,26 @@ class OpenAICompatibleClient:
                     "OpenAI-compatible provider is rate limited.",
                     503,
                 )
+            if self._is_model_not_found(response):
+                raise AppError(
+                    ErrorCode.LLM_MODEL_NOT_FOUND,
+                    "The configured OpenAI-compatible model was not found or is not "
+                    "accessible. Verify OPENAI_MODEL and provider access.",
+                    503,
+                )
             if response.is_error:
                 if response.status_code == 404:
                     raise AppError(
-                        ErrorCode.LLM_MODEL_NOT_FOUND,
-                        "The configured model was not found by the provider.",
+                        ErrorCode.LLM_UNAVAILABLE,
+                        "The OpenAI-compatible endpoint returned HTTP 404. Verify "
+                        "OPENAI_BASE_URL and endpoint compatibility.",
+                        503,
+                    )
+                if response.status_code in (401, 403):
+                    raise AppError(
+                        ErrorCode.LLM_UNAVAILABLE,
+                        "OpenAI-compatible provider authentication failed. Verify "
+                        "OPENAI_API_KEY and model access.",
                         503,
                     )
                 if response.status_code >= 500:
@@ -198,6 +213,35 @@ class OpenAICompatibleClient:
             ErrorCode.LLM_UNAVAILABLE,
             "OpenAI-compatible provider is unavailable.",
             503,
+        )
+
+    @staticmethod
+    def _is_model_not_found(response: httpx.Response) -> bool:
+        try:
+            data = response.json()
+        except ValueError:
+            return False
+        if not isinstance(data, dict):
+            return False
+        error = data.get("error")
+        if not isinstance(error, dict):
+            return False
+
+        code = error.get("code")
+        if isinstance(code, str) and code.lower() in {
+            "model_not_found",
+            "model_not_found_error",
+            "model_decommissioned",
+        }:
+            return True
+
+        message = error.get("message")
+        if not isinstance(message, str):
+            return False
+        normalized_message = message.lower()
+        return "model" in normalized_message and any(
+            phrase in normalized_message
+            for phrase in ("not found", "does not exist", "decommissioned")
         )
 
     @classmethod

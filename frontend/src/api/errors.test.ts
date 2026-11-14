@@ -37,5 +37,14 @@ describe("API Error Code Handling (API_CONTRACTS §2.2)", () => {
         ERROR_MESSAGES.AUDIO_EMPTY_OR_SILENT,
       );
     });
+
+    it.each(["LLM_UNAVAILABLE", "LLM_MODEL_NOT_FOUND"] as const)(
+      "uses the provider-specific server message for %s",
+      (code) => {
+        const providerMessage =
+          "The OpenAI-compatible endpoint returned HTTP 404. Verify OPENAI_BASE_URL.";
+        expect(getErrorMessage(code, providerMessage)).toBe(providerMessage);
+      },
+    );
   });
 });

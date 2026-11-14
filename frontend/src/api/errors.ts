@@ -70,9 +70,9 @@ export const ERROR_MESSAGES: Record<ContractErrorCode, string> = {
   EVALUATION_PARSE_FAILED:
     "The coach evaluation output could not be parsed. Please click Retry to generate feedback again.",
   LLM_UNAVAILABLE:
-    "The AI model service (Ollama) is currently unreachable. Please check that Ollama is running.",
+    "The configured AI provider is unreachable. Check its URL, credentials, and network connection.",
   LLM_MODEL_NOT_FOUND:
-    "The required AI model is not installed. Please install the model using 'ollama pull' and retry.",
+    "The configured model was not found by the active AI provider. Check the provider and model settings.",
   STT_NOT_READY:
     "The speech recognition engine is still loading. Please wait a moment and try again.",
   LLM_TIMEOUT:
@@ -89,6 +89,12 @@ export function getErrorMessage(
   code?: string | null,
   fallbackMessage?: string | null,
 ): string {
+  if (
+    (code === "LLM_UNAVAILABLE" || code === "LLM_MODEL_NOT_FOUND") &&
+    fallbackMessage?.trim()
+  ) {
+    return fallbackMessage;
+  }
   if (code && code in ERROR_MESSAGES) {
     return ERROR_MESSAGES[code as ContractErrorCode];
   }

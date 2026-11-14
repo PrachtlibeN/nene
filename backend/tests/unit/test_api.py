@@ -36,7 +36,7 @@ def test_app_selects_openai_compatible_provider_for_health(
 ) -> None:
     settings = Settings(
         _env_file=None,
-        llm_provider="openai_compatible",
+        LLM_PROVIDER="openai_compatible",
         openai_model="cloud-test-model",
         openai_api_key="test-token",
         echorole_db_url=f"sqlite:///{(tmp_path / 'cloud-health.db').as_posix()}",

@@ -140,6 +140,44 @@ def test_chat_maps_network_errors(
     client.close()
 
 
+@pytest.mark.parametrize(
+    ("status_code", "payload", "expected_code"),
+    [
+        (
+            400,
+            {"error": {"code": "model_not_found", "message": "Model unavailable"}},
+            ErrorCode.LLM_MODEL_NOT_FOUND,
+        ),
+        (
+            404,
+            {"error": {"message": "The requested model does not exist"}},
+            ErrorCode.LLM_MODEL_NOT_FOUND,
+        ),
+        (404, {"error": {"message": "Not Found"}}, ErrorCode.LLM_UNAVAILABLE),
+        (401, {"error": {"message": "Unauthorized"}}, ErrorCode.LLM_UNAVAILABLE),
+    ],
+)
+def test_chat_distinguishes_provider_model_errors_from_endpoint_errors(
+    status_code: int,
+    payload: dict[str, object],
+    expected_code: ErrorCode,
+) -> None:
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(status_code, json=payload)
+        )
+    )
+    llm = OpenAICompatibleClient(make_settings(), client)
+
+    with pytest.raises(AppError) as error:
+        llm.chat(LLMProfile.ROLEPLAY, [])
+
+    assert error.value.code is expected_code
+    assert error.value.http_status == 503
+    assert "ollama" not in error.value.message.lower()
+    client.close()
+
+
 def test_chat_maps_exhausted_rate_limit_retries() -> None:
     requests: list[httpx.Request] = []
 
