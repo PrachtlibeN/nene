@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -54,6 +56,32 @@ def test_chat_sends_profile_config_and_json_mode() -> None:
     assert result.prompt_tokens == 12
     assert result.completion_tokens == 7
     llm.close()
+    client.close()
+
+
+def test_chat_uses_json_schema_when_provided() -> None:
+    requests: list[httpx.Request] = []
+    schema: dict[str, object] = {
+        "type": "object",
+        "properties": {"summary": {"type": "string"}},
+        "required": ["summary"],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return chat_response()
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    llm = OllamaClient(make_settings(), client)
+    llm.chat(
+        LLMProfile.EVALUATION,
+        [LLMMessage(role="user", content="Evaluate.")],
+        json_mode=True,
+        json_schema=schema,
+    )
+
+    payload = json.loads(requests[0].read().decode())
+    assert payload["format"] == schema
     client.close()
 
 

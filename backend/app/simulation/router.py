@@ -1,8 +1,9 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, FastAPI, Query, Request
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import Settings
@@ -26,21 +27,25 @@ from app.simulation.service import SimulationService
 
 
 @asynccontextmanager
-async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     settings = cast(Settings, application.state.settings)
     service = getattr(application.state, "simulation_service", None)
-    engine = None
+    engine = cast(Engine | None, getattr(application.state, "db_engine", None))
+    owns_engine = engine is None
+    created_service = service is None
     if service is None:
-        engine = build_engine(settings.echorole_db_url)
-        factory = sessionmaker(bind=engine, expire_on_commit=False)
-        agent = cast(
-            RoleplayAgent,
-            getattr(application.state, "roleplay_agent", StubRoleplayAgent()),
-        )
+        if engine is None:
+            engine = build_engine(settings.echorole_db_url)
+        factory = getattr(application.state, "db_session_factory", None)
+        if factory is None:
+            factory = sessionmaker(bind=engine, expire_on_commit=False)
+        agent = getattr(application.state, "roleplay_agent", None)
+        if agent is None:
+            agent = StubRoleplayAgent()
         service = SimulationService(
             session_factory=factory,
             settings=settings,
-            agent=agent,
+            agent=cast(RoleplayAgent, agent),
             clock=getattr(application.state, "simulation_clock", None),
         )
         application.state.simulation_service = service
@@ -49,8 +54,9 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         service.sweep_idle_sessions()
         yield
     finally:
-        if engine is not None:
+        if owns_engine and engine is not None:
             engine.dispose()
+        if created_service:
             application.state.simulation_service = None
 
 

@@ -25,6 +25,7 @@ from app.roleplay.interfaces import (
     RoleplayReply,
     StubRoleplayAgent,
 )
+from app.roleplay.prompts import build_roleplay_prompt
 from app.schemas.contracts import (
     EndReason,
     ScenarioDefinition,
@@ -195,7 +196,7 @@ class SimulationService:
                 id=new_id("cnv_rp_"),
                 session_id=session.id,
                 agent_role="roleplay",
-                system_prompt="",
+                system_prompt=build_roleplay_prompt(self._scenario_out(scenario)),
                 model=self.settings.model_for(LLMProfile.ROLEPLAY),
                 created_at=now,
             )

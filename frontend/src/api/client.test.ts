@@ -21,6 +21,20 @@ describe("API Client", () => {
     expect(scenario.definition.persona.name).toBe("Dana Whitfield");
   });
 
+  it("uses the local backend API base URL by default", async () => {
+    let requestUrl = "";
+    server.use(
+      http.get("http://localhost:8000/api/v1/scenarios", ({ request }) => {
+        requestUrl = request.url;
+        return HttpResponse.json({ items: [], total: 0 });
+      }),
+    );
+
+    await api.listScenarios();
+
+    expect(requestUrl).toBe("http://localhost:8000/api/v1/scenarios");
+  });
+
   it("creates and starts a session", async () => {
     const session = await api.createSession("scn_a1b2c3");
     expect(session.id).toBeDefined();

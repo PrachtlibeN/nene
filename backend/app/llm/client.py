@@ -35,6 +35,7 @@ class OllamaClient:
         messages: list[LLMMessage],
         *,
         json_mode: bool = False,
+        json_schema: dict[str, object] | None = None,
     ) -> LLMResult:
         profile_config = self._settings.profile_config(profile)
         payload: dict[str, object] = {
@@ -47,7 +48,9 @@ class OllamaClient:
                 "num_ctx": profile_config.num_ctx,
             },
         }
-        if json_mode:
+        if json_schema is not None:
+            payload["format"] = json_schema
+        elif json_mode:
             payload["format"] = "json"
 
         started = time.perf_counter()

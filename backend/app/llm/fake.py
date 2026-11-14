@@ -13,6 +13,7 @@ class FakeLLMClient:
         self.settings = settings
         self.replies = deque(replies or [])
         self.calls: list[tuple[LLMProfile, list[LLMMessage], bool]] = []
+        self.json_schemas: list[dict[str, object] | None] = []
 
     def model_for(self, profile: LLMProfile) -> str:
         return self.settings.model_for(profile)
@@ -32,8 +33,10 @@ class FakeLLMClient:
         messages: list[LLMMessage],
         *,
         json_mode: bool = False,
+        json_schema: dict[str, object] | None = None,
     ) -> LLMResult:
         self.calls.append((profile, list(messages), json_mode))
+        self.json_schemas.append(json_schema)
         if not self.replies:
             raise RuntimeError("FakeLLMClient has no scripted reply for this call")
         content = self.replies.popleft()

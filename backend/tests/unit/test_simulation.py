@@ -21,6 +21,7 @@ from app.roleplay.interfaces import (
     RoleplayReply,
     StubRoleplayAgent,
 )
+from app.roleplay.prompts import build_roleplay_prompt
 
 
 class FixedClock:
@@ -92,8 +93,7 @@ def _client_environment(tmp_path, clock, agent=None):
     )
     application = create_app(settings)
     application.state.simulation_clock = clock
-    if agent is not None:
-        application.state.roleplay_agent = agent
+    application.state.roleplay_agent = agent or StubRoleplayAgent()
 
     with TestClient(application) as client:
         yield client, clock
@@ -192,6 +192,8 @@ def test_session_create_start_turn_history_end_and_m6_interface(environment) -> 
         assert conversation is not None
         assert conversation.model == service.settings.model_for(LLMProfile.ROLEPLAY)
         assert conversation.id == created.json()["roleplay_conversation_id"]
+        scenario = service.get_transcript(session_id).scenario
+        assert conversation.system_prompt == build_roleplay_prompt(scenario)
 
 
 def test_agent_conclusion_ends_automatically(tmp_path) -> None:

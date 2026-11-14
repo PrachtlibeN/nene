@@ -40,4 +40,5 @@ class LLMClient(Protocol):
         messages: list[LLMMessage],
         *,
         json_mode: bool = False,
+        json_schema: dict[str, object] | None = None,
     ) -> LLMResult: ...

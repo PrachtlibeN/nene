@@ -4,6 +4,7 @@ import json
 import logging
 import threading
 from datetime import datetime
+from typing import cast
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -64,20 +65,24 @@ class EvaluationService:
         llm: LLMClient,
         simulation: SimulationService | None = None,
         clock: Clock | None = None,
+        coach: EvaluationCoach | None = None,
     ) -> None:
         self.db = db
         self.session_factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
         self.settings = settings
         self.llm = llm
-        self.coach = EvaluationCoach(llm)
+        self.coach = coach or EvaluationCoach(llm)
         self.clock = clock or utc_now
         if simulation is None:
             from app.simulation.service import SimulationService as DefaultSimulationService
 
-            simulation = DefaultSimulationService(
-                session_factory=self.session_factory,
-                settings=settings,
-                clock=self.clock,
+            simulation = cast(
+                SimulationService,
+                DefaultSimulationService(
+                    session_factory=self.session_factory,
+                    settings=settings,
+                    clock=self.clock,
+                ),
             )
         self.simulation = simulation
 

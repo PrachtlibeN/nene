@@ -1,30 +1,39 @@
-# EchoRole (Nene)
+# EchoRole
 
-Nền tảng nhập vai tình huống giao tiếp thực tế. The current foundation exposes
-the versioned API contract and starts with non-health endpoints intentionally
-returning `NOT_IMPLEMENTED` until their module ships.
+Local-first practice for realistic communication scenarios. The backend runs
+roleplay and evaluation through Ollama; speech recognition uses a local
+faster-whisper model, and browser speech synthesis speaks interviewer replies.
 
 ## Requirements
 
-- Python 3.11+
-- Node.js 20+ and npm
-- Ollama installed locally for real LLM calls (Phase 0 tests use fakes)
+- Python 3.11 or newer (validated on this machine with Python 3.14.0)
+- Node.js 20 or newer and npm (validated with Node.js 26.13.1 and npm 11.20.0)
+- Ollama with the model configured in `.env`
 
 ## Quickstart (PowerShell)
 
-From the repository root, copy `.env.example` to `.env`, then assign values to
-the variable names. Set `OLLAMA_MODEL` to a model already installed in Ollama.
-The model is intentionally required; the application has no model-name default.
+From the repository root, copy the recommended local configuration:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+The template currently selects the locally installed Ollama candidate and the
+cached Whisper model. [The benchmark report](docs/architecture/LLM_BENCHMARK.md)
+records benchmark coverage and any remaining acceptance gaps. Change
+`OLLAMA_MODEL` or `WHISPER_MODEL` in `.env` when using different local models.
+The 180-second LLM timeout and 1200-token
+Coach budget allow evaluation output to finish on the CPU-only benchmark
+machine; evaluations run asynchronously and the frontend polls for their result.
 
 Backend, in terminal 1:
 
 ```powershell
 cd backend
-py -3.11 -m venv .venv
+py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
 python -m alembic upgrade head
-$env:OLLAMA_MODEL = "your-installed-model"
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -36,13 +45,40 @@ npm ci
 npm run dev
 ```
 
-The frontend uses MSW mocks by default; API calls are not sent to Ollama. To
-exercise real local services, disable the mock worker in the frontend.
+Mocks are disabled by default, so the browser calls
+`http://localhost:8000/api/v1`. To opt into MSW for frontend-only work, set the
+flag before starting Vite:
 
-For CI parity, run `make test` and `make lint` from `backend/`, then
-`npm run typecheck`, `npm run lint`, `npm run test -- --run`, and `npm run build`
-from `frontend/`. The backend Makefile is optional on Windows; equivalent
-commands are documented below and in `backend/pyproject.toml`.
+```powershell
+$env:VITE_USE_MOCKS = "true"
+npm run dev
+```
+
+Set it to `"false"` (or remove it) and restart Vite to use the real backend.
+`VITE_API_BASE_URL` can override the default backend address; for example:
+
+```powershell
+$env:VITE_API_BASE_URL = "http://localhost:8000/api/v1"
+```
+
+## Validation
+
+From `backend/`:
+
+```powershell
+python -m ruff check .
+python -m mypy app
+python -m pytest
+```
+
+From `frontend/`:
+
+```powershell
+npm run typecheck
+npm run lint
+npm test -- --run
+npm run build
+```
 
 ## Branch protection
 

@@ -49,6 +49,11 @@ type OperationBody<Operation> = Operation extends { responses: infer Responses }
 type ApiPath = keyof paths;
 type ApiMethod<Path extends ApiPath> = Extract<keyof paths[Path], "get" | "post">;
 
+const API_PREFIX = "/api/v1";
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1"
+).replace(/\/+$/, "");
+
 export class ApiError extends Error {
   readonly status: number;
   readonly envelope: ErrorEnvelope | null;
@@ -70,6 +75,8 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const headers: Record<string, string> = {};
+  const suffix = path.startsWith(API_PREFIX) ? path.slice(API_PREFIX.length) : path;
+  const url = `${API_BASE_URL}${suffix}`;
 
   if (!isFormData) {
     headers["Content-Type"] = "application/json";
@@ -82,7 +89,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(url, {
     ...init,
     headers: isFormData ? init?.headers : headers,
   });

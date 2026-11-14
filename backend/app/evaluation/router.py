@@ -1,14 +1,15 @@
 from typing import Annotated, cast
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import LLMProfile, Settings
 from app.core.db import get_db
 from app.core.errors import API_ERROR_RESPONSES, AppError, ErrorCode
+from app.evaluation.coach import EvaluationCoach
 from app.evaluation.interfaces import Clock, SimulationService, utc_now
 from app.evaluation.service import EvaluationService
-from app.llm.interfaces import LLMClient, LLMMessage, LLMResult
+from app.llm.interfaces import LLMClient, LLMHealth, LLMMessage, LLMResult
 from app.schemas.contracts import EmptyRequest, EvaluationOut
 
 
@@ -19,12 +20,23 @@ class _UnconfiguredLLMClient:
     def model_for(self, profile: LLMProfile) -> str:
         return self.settings.model_for(profile)
 
+    def health(self) -> LLMHealth:
+        return LLMHealth(
+            status="unavailable",
+            models={
+                "roleplay": self.model_for(LLMProfile.ROLEPLAY),
+                "evaluation": self.model_for(LLMProfile.EVALUATION),
+            },
+            detail="No LLM client is configured for this application.",
+        )
+
     def chat(
         self,
         profile: LLMProfile,
         messages: list[LLMMessage],
         *,
         json_mode: bool = False,
+        json_schema: dict[str, object] | None = None,
     ) -> LLMResult:
         raise AppError(
             ErrorCode.LLM_UNAVAILABLE,
@@ -53,14 +65,26 @@ def get_simulation_service(
         return cast(SimulationService, service)
     clock = getattr(request.app.state, "evaluation_clock", utc_now)
     from app.simulation.service import SimulationService as DefaultSimulationService
-    from sqlalchemy.orm import sessionmaker
 
     session_factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
-    return DefaultSimulationService(
-        session_factory=session_factory,
-        settings=request.app.state.settings,
-        clock=clock,
+    return cast(
+        SimulationService,
+        DefaultSimulationService(
+            session_factory=session_factory,
+            settings=request.app.state.settings,
+            clock=clock,
+        ),
     )
+
+
+def get_evaluation_coach(
+    request: Request,
+    llm: Annotated[LLMClient, Depends(get_llm_client)],
+) -> EvaluationCoach:
+    coach = getattr(request.app.state, "evaluation_coach", None)
+    if coach is not None and getattr(coach, "llm", None) is llm:
+        return cast(EvaluationCoach, coach)
+    return EvaluationCoach(llm)
 
 
 def get_evaluation_service(
@@ -69,6 +93,7 @@ def get_evaluation_service(
     llm: Annotated[LLMClient, Depends(get_llm_client)],
     clock: Annotated[Clock, Depends(get_evaluation_clock)],
     simulation: Annotated[SimulationService, Depends(get_simulation_service)],
+    coach: Annotated[EvaluationCoach, Depends(get_evaluation_coach)],
 ) -> EvaluationService:
     return EvaluationService(
         db=db,
@@ -76,6 +101,7 @@ def get_evaluation_service(
         llm=llm,
         simulation=simulation,
         clock=clock,
+        coach=coach,
     )
 
 

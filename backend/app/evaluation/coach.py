@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import Counter
 from collections.abc import Mapping
 from typing import Any
 
 from app.core.config import LLMProfile
 from app.evaluation.interfaces import CoachContext, CoachOutput
 from app.evaluation.prompts import build_coach_system_prompt, build_coach_user_prompt
+from app.evaluation.rubric import CRITERIA
 from app.llm.interfaces import LLMClient, LLMMessage
 from app.schemas.contracts import CoachResult
 
@@ -60,6 +62,7 @@ class EvaluationCoach:
                 LLMProfile.EVALUATION,
                 llm_messages,
                 json_mode=True,
+                json_schema=self._schema_for_candidate_ids(candidate_ids),
             )
             total_latency_ms += response.latency_ms
             model = response.model
@@ -69,6 +72,7 @@ class EvaluationCoach:
             )
             llm_messages.append(assistant_message)
             history.append(assistant_message)
+            raw: Any = None
             try:
                 raw = json.loads(response.content)
                 normalized = self._discard_extra_fields(raw)
@@ -81,10 +85,17 @@ class EvaluationCoach:
                 correction = LLMMessage(
                     role="user",
                     content=(
-                        "Correct the validation issues in your previous answer. "
-                        "Return only a valid CoachResult JSON object with six unique "
-                        "criteria, integer scores from 0 to 10, and evidence IDs "
-                        "from candidate turns in the transcript."
+                        f"Validation issue: {self._criterion_feedback(raw)} "
+                        "Correct the schema errors in your previous answer. Return "
+                        "only JSON with `task_outcome` as an object, `criteria` as "
+                        "exactly these six objects, in order: "
+                        f"{', '.join(criterion.value for criterion in CRITERIA)}. "
+                        "Use each criterion exactly once. `strengths` and "
+                        "`improvements` must be arrays of objects; `next_task` "
+                        "must be an object. Each criterion needs an integer `score` "
+                        "from 0 to 10, `rationale`, and `evidence_turn_ids`. Use only "
+                        f"these candidate turn IDs: {', '.join(sorted(candidate_ids))}. "
+                        "Do not cite interviewer turns or add fields."
                     ),
                 )
                 llm_messages.append(correction)
@@ -97,6 +108,49 @@ class EvaluationCoach:
                 messages=history,
             )
         raise RuntimeError("Coach retry loop exited without a result")
+
+    @staticmethod
+    def _schema_for_candidate_ids(candidate_ids: set[str]) -> dict[str, Any]:
+        schema = CoachResult.model_json_schema()
+        definitions = schema.get("$defs")
+        if isinstance(definitions, dict):
+            for definition in definitions.values():
+                if not isinstance(definition, dict):
+                    continue
+                properties = definition.get("properties")
+                if not isinstance(properties, dict):
+                    continue
+                evidence = properties.get("evidence_turn_ids")
+                if not isinstance(evidence, dict):
+                    continue
+                items = evidence.get("items")
+                if isinstance(items, dict):
+                    items["enum"] = sorted(candidate_ids)
+        return schema
+
+    @staticmethod
+    def _criterion_feedback(raw: Any) -> str:
+        if not isinstance(raw, Mapping):
+            return "The previous answer was not a JSON object."
+        criteria = raw.get("criteria")
+        if not isinstance(criteria, list):
+            return "The previous answer did not contain a criteria array."
+        names = [
+            item["criterion"]
+            for item in criteria
+            if isinstance(item, Mapping) and isinstance(item.get("criterion"), str)
+        ]
+        counts = Counter(names)
+        missing = [
+            criterion.value for criterion in CRITERIA if not counts[criterion.value]
+        ]
+        duplicated = [name for name, count in counts.items() if count > 1]
+        if missing or duplicated:
+            return (
+                f"The criteria list duplicated {', '.join(duplicated) or 'none'} "
+                f"and omitted {', '.join(missing) or 'none'}."
+            )
+        return "Use each required criterion exactly once."
 
     @classmethod
     def _discard_extra_fields(cls, raw: Any) -> Any:

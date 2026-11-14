@@ -35,6 +35,7 @@ from app.models.entities import (
 from app.models.entities import (
     Session as InterviewSession,
 )
+from app.roleplay.interfaces import StubRoleplayAgent
 from app.schemas.contracts import (
     ScenarioCriterion,
     ScenarioDefinition,
@@ -90,6 +91,7 @@ def evaluation_env(
     clock = FrozenClock()
     app.state.evaluation_clock = clock
     app.state.simulation_clock = clock
+    app.state.roleplay_agent = StubRoleplayAgent()
 
     def override_db() -> Iterator[DBSession]:
         with factory() as db:
@@ -297,7 +299,10 @@ def test_speech_metrics_are_null_without_speech_turns() -> None:
 
 
 def test_coach_uses_rubric_json_mode_and_discards_backend_fields() -> None:
-    transcript = [_turn("trn_candidate", "candidate", "I improved uptime.")]
+    transcript = [
+        _turn("trn_interviewer", "interviewer", "What did you improve?"),
+        _turn("trn_candidate", "candidate", "I improved uptime."),
+    ]
     llm = FakeLLMClient(
         Settings(OLLAMA_MODEL="base", ollama_model_evaluation="evaluation"),
         replies=[
@@ -318,6 +323,25 @@ def test_coach_uses_rubric_json_mode_and_discards_backend_fields() -> None:
     assert len(llm.calls) == 1
     assert llm.calls[0][0] is LLMProfile.EVALUATION
     assert llm.calls[0][2] is True
+    schema = llm.json_schemas[0]
+    assert schema is not None
+    schema_properties = schema["properties"]
+    assert isinstance(schema_properties, dict)
+    criteria_schema = schema_properties["criteria"]
+    assert isinstance(criteria_schema, dict)
+    assert criteria_schema["minItems"] == len(CRITERIA)
+    assert criteria_schema["maxItems"] == len(CRITERIA)
+    definitions = schema["$defs"]
+    assert isinstance(definitions, dict)
+    criterion = definitions["CriterionScoreIn"]
+    assert isinstance(criterion, dict)
+    properties = criterion["properties"]
+    assert isinstance(properties, dict)
+    evidence = properties["evidence_turn_ids"]
+    assert isinstance(evidence, dict)
+    items = evidence["items"]
+    assert isinstance(items, dict)
+    assert items["enum"] == ["trn_candidate"]
     assert not hasattr(output.result, "overall_score")
     assert output.result.criteria[0].score == 7
     assert all(
@@ -360,6 +384,33 @@ def test_coach_retries_invalid_evidence_once_and_then_fails() -> None:
         EvaluationCoach(invalid_llm).evaluate(context)
     assert len(invalid_llm.calls) == 2
     assert len(error.value.messages) == 4
+
+
+def test_coach_retry_identifies_duplicate_and_missing_criteria() -> None:
+    invalid = _coach_result("trn_candidate")
+    criteria = invalid["criteria"]
+    assert isinstance(criteria, list)
+    criteria[-1] = dict(criteria[0])
+    llm = FakeLLMClient(
+        Settings(OLLAMA_MODEL="test-model"),
+        replies=[
+            json.dumps(invalid),
+            json.dumps(_coach_result("trn_candidate")),
+        ],
+    )
+    context = CoachContext(
+        evaluation_id="evl_duplicate",
+        conversation_id="cnv_ev_duplicate",
+        scenario=_coach_scenario(),
+        transcript=[_turn("trn_candidate", "candidate", "I led the project.")],
+    )
+
+    output = EvaluationCoach(llm).evaluate(context)
+
+    assert output.result.criteria
+    correction = output.messages[2].content
+    assert "duplicated relevance" in correction
+    assert "omitted language_accuracy" in correction
 
 
 def test_evaluation_endpoints_persist_separate_coach_result_and_metrics(

@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.requests import Request
 
 from app.core.config import REPOSITORY_ROOT, get_settings
 
@@ -49,6 +50,9 @@ def get_db_session_factory() -> sessionmaker[Session]:
     return sessionmaker(bind=get_engine(), expire_on_commit=False)
 
 
-def get_db() -> Iterator[Session]:
-    with get_db_session_factory()() as session:
+def get_db(request: Request) -> Iterator[Session]:
+    factory = getattr(request.app.state, "db_session_factory", None)
+    if factory is None:
+        factory = get_db_session_factory()
+    with factory() as session:
         yield session

@@ -20,16 +20,30 @@ def build_coach_system_prompt() -> str:
         )
         for criterion in CRITERIA
     )
+    result_shape = (
+        '{"summary":"...",'
+        '"task_outcome":{"achieved":true,"explanation":"..."},'
+        '"criteria":[{"criterion":"relevance","score":0,"rationale":"...",'
+        '"evidence_turn_ids":["<candidate-turn-id>"]}, ... six objects total],'
+        '"strengths":[{"text":"...","evidence_turn_ids":["<candidate-turn-id>"]}],'
+        '"improvements":[{"text":"...","evidence_turn_ids":["<candidate-turn-id>"],'
+        '"example_rewrite":"..."}],'
+        '"next_task":{"title":"...","instructions":"..."}}'
+    )
     return (
         "You are an independent communication coach. Judge only what is in the "
         "transcript. Ignore likely speech-recognition artefacts such as punctuation "
         "and odd spellings; judge composure from wording only, not voice tone. Score "
         "each criterion below with an integer from 0 to 10 and cite one or more "
         "candidate turn IDs as evidence. Give qualitative feedback and elaborate "
-        "most on the scenario evaluation-focus criteria. Output only a JSON object "
-        "matching CoachResult: summary, task_outcome, criteria, strengths, "
-        "improvements, next_task. Do not compute or output an overall score, weights, "
-        "or delivery metrics.\n\n"
+        "most on the scenario evaluation-focus criteria. Return exactly one "
+        "criterion object for each, in this order: relevance, structure, clarity, "
+        "composure, conciseness, language_accuracy. Output only a JSON object "
+        "with exactly this structure: "
+        f"{result_shape} Use one unique object for each rubric criterion, JSON integer "
+        "scores from 0 to 10, and actual candidate turn IDs instead of the placeholder. "
+        "Do not add fields, compute an overall score, include weights, or include "
+        "delivery metrics.\n\n"
         f"Rubric version 1.0:\n{rubric}"
     )
 
