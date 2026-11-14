@@ -56,6 +56,13 @@ def decode_audio_in_memory(audio: bytes) -> Any:
         return decode_audio(buf)
     except AppError:
         raise
+    except (ModuleNotFoundError, ImportError) as exc:
+        raise AppError(
+            ErrorCode.STT_UNAVAILABLE,
+            "Speech recognition engine (faster-whisper) is not installed.",
+            503,
+            details={"detail": str(exc)},
+        ) from exc
     except Exception as exc:
         logger.warning("In-memory audio decoding failed: %s", exc)
         raise AppError(
@@ -104,6 +111,12 @@ class FasterWhisperEngine:
         self._lock = threading.Lock()
         self._warmup_thread: threading.Thread | None = None
 
+        if not self._is_whisper_available():
+            self._status = "unavailable"
+            self._error_detail = "faster-whisper is not installed in the environment."
+            logger.info("faster-whisper is not installed. STT will be unavailable.")
+            return
+
         if warmup:
             self._warmup_thread = threading.Thread(
                 target=self._load_and_warmup,
@@ -111,6 +124,12 @@ class FasterWhisperEngine:
                 daemon=True,
             )
             self._warmup_thread.start()
+
+    @staticmethod
+    def _is_whisper_available() -> bool:
+        import importlib.util
+
+        return importlib.util.find_spec("faster_whisper") is not None
 
     def _load_and_warmup(self) -> None:
         with self._lock:
@@ -142,6 +161,10 @@ class FasterWhisperEngine:
                 self._status = "ready"
                 self._error_detail = None
                 logger.info("faster-whisper model '%s' loaded and ready.", self.model_name)
+            except (ModuleNotFoundError, ImportError) as exc:
+                logger.info("faster-whisper not available: %s", exc)
+                self._status = "unavailable"
+                self._error_detail = "faster-whisper is not installed in the environment."
             except Exception as exc:
                 logger.exception(
                     "Failed to load faster-whisper model '%s': %s",
@@ -162,17 +185,20 @@ class FasterWhisperEngine:
         }
 
     def transcribe(self, audio: bytes, content_type: str) -> Transcription:
+        if self._status == "unavailable" or self._model is None:
+            detail_msg = self._error_detail or "faster-whisper is not installed"
+            raise AppError(
+                ErrorCode.STT_UNAVAILABLE,
+                f"Speech-to-text service is unavailable: {detail_msg}",
+                503,
+                details=self.status(),
+            )
         if self._status == "loading":
             raise AppError(
                 ErrorCode.STT_NOT_READY,
                 "Speech-to-text model is still loading.",
                 503,
-            )
-        if self._status == "unavailable" or self._model is None:
-            raise AppError(
-                ErrorCode.STT_NOT_READY,
-                f"Speech-to-text model is unavailable: {self._error_detail}",
-                503,
+                details=self.status(),
             )
 
         settings = get_settings()

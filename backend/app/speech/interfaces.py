@@ -46,8 +46,12 @@ class FakeSpeechEngine:
         should_fail_empty_or_silent: bool = False,
         should_fail_too_long: bool = False,
         should_fail_unsupported: bool = False,
+        unavailable: bool = False,
+        detail: str | None = None,
     ) -> None:
         self.ready = ready
+        self.unavailable = unavailable
+        self.detail = detail
         self.text = text
         self.duration_ms = duration_ms
         self.avg_confidence = avg_confidence
@@ -63,6 +67,13 @@ class FakeSpeechEngine:
         self.should_fail_unsupported = should_fail_unsupported
 
     def transcribe(self, audio: bytes, content_type: str) -> Transcription:
+        if self.unavailable:
+            raise AppError(
+                ErrorCode.STT_UNAVAILABLE,
+                "Speech engine is unavailable.",
+                503,
+                details={"status": "unavailable", "detail": self.detail},
+            )
         if not self.ready or self.should_fail_not_ready:
             raise AppError(
                 ErrorCode.STT_NOT_READY,
@@ -100,9 +111,10 @@ class FakeSpeechEngine:
 
     def status(self) -> dict[str, object]:
         return {
-            "status": "ready" if self.ready else "loading",
+            "status": "unavailable" if self.unavailable else ("ready" if self.ready else "loading"),
             "engine": self.engine,
             "model": self.model,
             "device": self.device,
             "language": "en",
+            "detail": self.detail,
         }

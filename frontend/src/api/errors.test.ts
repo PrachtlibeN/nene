@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { CONTRACT_ERROR_CODES, DEFAULT_FALLBACK_ERROR, ERROR_MESSAGES, getErrorMessage } from "./errors";
 
 describe("API Error Code Handling (API_CONTRACTS §2.2)", () => {
-  it("defines friendly messages for all 23 error codes", () => {
-    expect(CONTRACT_ERROR_CODES.length).toBe(23);
+  it("defines friendly messages for all 24 error codes", () => {
+    expect(CONTRACT_ERROR_CODES.length).toBe(24);
 
     for (const code of CONTRACT_ERROR_CODES) {
       const message = ERROR_MESSAGES[code];

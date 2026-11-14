@@ -75,6 +75,18 @@ def test_speech_status_returns_contract_shape() -> None:
     assert ACCEPTED_AUDIO_TYPES == frozenset(data["limits"]["accepted_types"])
 
 
+def test_speech_status_reports_unavailable() -> None:
+    fake = FakeSpeechEngine(unavailable=True, detail="faster-whisper is not installed")
+    set_speech_engine(fake)
+
+    client = TestClient(create_app())
+    response = client.get("/api/v1/speech/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["stt"]["status"] == "unavailable"
+
+
 def test_speech_status_reports_loading_when_not_ready() -> None:
     fake = FakeSpeechEngine(ready=False, model="base.en")
     set_speech_engine(fake)
@@ -190,6 +202,22 @@ def test_transcribe_returns_503_stt_not_ready_when_loading() -> None:
     assert response.json()["error"]["code"] == "STT_NOT_READY"
 
 
+def test_transcribe_returns_503_stt_unavailable() -> None:
+    fake = FakeSpeechEngine(unavailable=True, detail="faster-whisper is not installed")
+    set_speech_engine(fake)
+
+    client = TestClient(create_app())
+    wav_data = make_wav_bytes(duration_s=1.0)
+
+    response = client.post(
+        "/api/v1/speech/transcribe",
+        files={"audio": ("speech.wav", wav_data, "audio/wav")},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "STT_UNAVAILABLE"
+
+
 def test_transcribe_returns_415_on_unsupported_content_type() -> None:
     fake = FakeSpeechEngine(ready=True)
     set_speech_engine(fake)
@@ -301,6 +329,18 @@ def test_no_audio_files_persisted_to_disk(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert files_before == files_after
+
+
+def test_faster_whisper_engine_handles_missing_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(FasterWhisperEngine, "_is_whisper_available", staticmethod(lambda: False))
+    engine = FasterWhisperEngine()
+    status = engine.status()
+    assert status["status"] == "unavailable"
+    assert "faster-whisper is not installed" in str(status["detail"])
+
+    with pytest.raises(Exception) as exc_info:
+        engine.transcribe(b"fake", "audio/wav")
+    assert getattr(exc_info.value, "code", None) == "STT_UNAVAILABLE"
 
 
 @pytest.mark.stt

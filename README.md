@@ -14,7 +14,29 @@ For current capabilities, validation results, and known gaps, see the
 - Node.js 20 or newer and npm (validated with Node.js 26.13.1 and npm 11.20.0)
 - Ollama and a locally installed model only when `LLM_PROVIDER=ollama`
 
-## Quickstart (PowerShell)
+## Quickstart
+
+### 1. One-click Local Runner (Recommended)
+
+After cloning the repository, launch both the backend and frontend with a single command:
+
+- **Windows (PowerShell):**
+  ```powershell
+  .\run_local.ps1
+  ```
+- **macOS / Linux / WSL:**
+  ```bash
+  chmod +x run_local.sh
+  ./run_local.sh
+  ```
+
+The script automatically initializes `.env` from `.env.example` (if missing), creates the SQLite data directory, runs database migrations (`alembic upgrade head`), and starts both servers:
+- **Backend API:** `http://127.0.0.1:8000`
+- **Frontend UI:** `http://localhost:5173`
+
+Press `Ctrl+C` to gracefully shut down both services.
+
+### 2. Manual Step-by-Step Setup
 
 From the repository root, copy the recommended local configuration:
 
@@ -104,6 +126,33 @@ npm run lint
 npm test -- --run
 npm run build
 ```
+
+## Deployment
+
+### Backend on Render (Free Tier - 512MB RAM)
+
+EchoRole is optimized to run smoothly on Render Free (512MB RAM) without `faster-whisper`. When `faster-whisper` is absent from the environment, the app boots cleanly and returns `STT_UNAVAILABLE` so the frontend automatically switches to text input or browser Web Speech API.
+
+- **Blueprint (`render.yaml`):** The repository includes `render.yaml` at the root with `rootDir: backend`.
+- **Manual Render Web Service Settings:**
+  - **Root Directory:** `backend` (or `echorole/backend`)
+  - **Environment:** `Python 3`
+  - **Build Command:** `pip install -e .`
+  - **Start Command:** `mkdir -p data && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+  - **Environment Variables:**
+    - `LLM_PROVIDER`: `openai_compatible`
+    - `OPENAI_BASE_URL`: (e.g. `https://api.groq.com/openai/v1` or `https://generativelanguage.googleapis.com/v1beta/openai/`)
+    - `OPENAI_API_KEY`: your API key
+    - `OPENAI_MODEL`: (e.g. `llama-3.3-70b-versatile`)
+    - `CORS_ORIGINS`: `["https://your-frontend.vercel.app"]`
+
+### Frontend on Vercel
+
+- **Root Directory:** `frontend`
+- **Framework Preset:** `Vite`
+- **SPA Rewrites:** Pre-configured in `frontend/vercel.json` (`rewrites: [{"source": "/(.*)", "destination": "/index.html"}]`) so refreshing sub-pages does not trigger 404 errors.
+- **Environment Variables:**
+  - `VITE_API_BASE_URL`: `https://your-backend.onrender.com/api/v1`
 
 ## Branch protection
 

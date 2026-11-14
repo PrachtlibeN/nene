@@ -83,6 +83,7 @@
 | 503 | `LLM_UNAVAILABLE` | M2 | Configured LLM provider is unreachable, rejects authentication/access, or remains rate-limited after retries |
 | 503 | `LLM_MODEL_NOT_FOUND` | M2 | Configured model is missing or inaccessible from the active provider; guidance is provider-specific (for Ollama, pull the configured model) |
 | 503 | `STT_NOT_READY` | M5 | Whisper model still loading / failed to load |
+| 503 | `STT_UNAVAILABLE` | M5 | Speech recognition engine (faster-whisper) not installed or unavailable |
 | 504 | `LLM_TIMEOUT` | M2 | Configured LLM provider call exceeded timeout |
 
 ### 2.3 Rules

@@ -84,6 +84,14 @@ async def transcribe_speech(
         )
 
     status_info = engine.status()
+    if status_info.get("status") == "unavailable":
+        detail_msg = status_info.get("detail") or "faster-whisper is not installed"
+        raise AppError(
+            ErrorCode.STT_UNAVAILABLE,
+            f"Speech recognition is unavailable: {detail_msg}",
+            503,
+            details=status_info,
+        )
     if status_info.get("status") != "ready":
         raise AppError(
             ErrorCode.STT_NOT_READY,

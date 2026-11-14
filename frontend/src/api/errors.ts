@@ -25,6 +25,7 @@ export const CONTRACT_ERROR_CODES = [
   "LLM_UNAVAILABLE",
   "LLM_MODEL_NOT_FOUND",
   "STT_NOT_READY",
+  "STT_UNAVAILABLE",
   "LLM_TIMEOUT",
 ] as const;
 
@@ -75,6 +76,8 @@ export const ERROR_MESSAGES: Record<ContractErrorCode, string> = {
     "The configured model was not found by the active AI provider. Check the provider and model settings.",
   STT_NOT_READY:
     "The speech recognition engine is still loading. Please wait a moment and try again.",
+  STT_UNAVAILABLE:
+    "Speech recognition is currently unavailable on the server. Please use text input or your browser's speech recognition.",
   LLM_TIMEOUT:
     "The AI assistant request timed out. Please try your request again.",
 };

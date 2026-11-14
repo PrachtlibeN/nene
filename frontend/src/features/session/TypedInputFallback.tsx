@@ -7,6 +7,27 @@ interface TypedInputFallbackProps {
   onSendTyped: (text: string) => void;
 }
 
+interface BrowserSpeechRecognitionEvent {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+}
+
+interface BrowserSpeechRecognitionInstance {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+  start: () => void;
+}
+
 export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
   isMicDenied,
   isDisabled,
@@ -14,6 +35,44 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
   onSendTyped,
 }) => {
   const [text, setText] = useState<string>("");
+  const [isListening, setIsListening] = useState<boolean>(false);
+
+  const isSpeechRecognitionSupported =
+    typeof window !== "undefined" &&
+    Boolean(
+      (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition ||
+        (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition,
+    );
+
+  const handleWebSpeech = () => {
+    if (isListening || isDisabled || isSending) return;
+    const windowWithSpeech = window as unknown as {
+      SpeechRecognition?: new () => BrowserSpeechRecognitionInstance;
+      webkitSpeechRecognition?: new () => BrowserSpeechRecognitionInstance;
+    };
+    const SpeechRecognitionClass =
+      windowWithSpeech.SpeechRecognition || windowWithSpeech.webkitSpeechRecognition;
+    if (!SpeechRecognitionClass) return;
+
+    try {
+      const recognition = new SpeechRecognitionClass();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+      recognition.onresult = (event: BrowserSpeechRecognitionEvent) => {
+        const transcript = event?.results?.[0]?.[0]?.transcript;
+        if (transcript) {
+          setText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+      };
+      recognition.start();
+    } catch {
+      setIsListening(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,14 +133,27 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
           <span className="text-[11px] text-slate-400">
             {text.length}/2000 characters
           </span>
-          <button
-            type="submit"
-            onClick={handleSubmit}
-            disabled={isDisabled || isSending || text.trim().length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none disabled:opacity-50"
-          >
-            {isSending ? "Sending..." : "Send Typed Answer"}
-          </button>
+          <div className="flex items-center gap-2">
+            {isSpeechRecognitionSupported && (
+              <button
+                type="button"
+                onClick={handleWebSpeech}
+                disabled={isDisabled || isSending}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                aria-label="Use browser speech recognition"
+              >
+                {isListening ? "Listening..." : "Dictate (Web Speech)"}
+              </button>
+            )}
+            <button
+              type="submit"
+              onClick={handleSubmit}
+              disabled={isDisabled || isSending || text.trim().length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none disabled:opacity-50"
+            >
+              {isSending ? "Sending..." : "Send Typed Answer"}
+            </button>
+          </div>
         </div>
       </form>
     </div>
