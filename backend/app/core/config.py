@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from enum import StrEnum
 from pathlib import Path
 
@@ -7,6 +8,13 @@ from pydantic import BaseModel, Field, SecretStr, field_validator, model_validat
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://nene.siegpracht49.workers.dev",
+]
+DEFAULT_CORS_ORIGIN_REGEX = r"^https://([a-zA-Z0-9_-]+\.)*(workers\.dev|pages\.dev)$"
 
 
 class LLMProfile(StrEnum):
@@ -37,7 +45,14 @@ class Settings(BaseSettings):
     )
 
     echorole_db_url: str = "sqlite:///./data/echorole.db"
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    cors_origins: list[str] | str = Field(
+        default_factory=lambda: list(DEFAULT_CORS_ORIGINS),
+        validation_alias="CORS_ORIGINS",
+    )
+    cors_origin_regex: str | None = Field(
+        default=DEFAULT_CORS_ORIGIN_REGEX,
+        validation_alias="CORS_ORIGIN_REGEX",
+    )
     llm_provider: LLMProvider = Field(
         default=LLMProvider.OLLAMA,
         validation_alias="LLM_PROVIDER",
@@ -77,6 +92,43 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_model(cls, value: str | None) -> str | None:
         return value.strip() if value is not None else None
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: object) -> list[str]:
+        if isinstance(v, list):
+            return [str(item).strip() for item in v if str(item).strip()]
+        if isinstance(v, str):
+            val = v.strip()
+            if not val:
+                return []
+            if (val.startswith("[") and val.endswith("]")) or (
+                val.startswith("(") and val.endswith(")")
+            ):
+                try:
+                    parsed = json.loads(val)
+                    if isinstance(parsed, list):
+                        return [str(x).strip() for x in parsed if str(x).strip()]
+                except Exception:
+                    pass
+                inner = val[1:-1].strip()
+                if inner:
+                    return [
+                        x.strip().strip("'\"")
+                        for x in inner.split(",")
+                        if x.strip().strip("'\"")
+                    ]
+                return []
+            return [x.strip() for x in val.split(",") if x.strip()]
+        return []
+
+    @field_validator("cors_origin_regex", mode="before")
+    @classmethod
+    def assemble_cors_origin_regex(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        val = str(v).strip()
+        return val if val else None
 
     @model_validator(mode="after")
     def require_active_provider_model(self) -> Settings:

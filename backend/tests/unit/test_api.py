@@ -113,3 +113,22 @@ def test_openapi_declares_exactly_fourteen_contract_endpoints() -> None:
 
     assert len(paths) == 11
     assert sum(len(path_item) for path_item in paths.values()) == 14
+
+
+def test_cors_headers_allow_default_cloudflare_and_subdomains() -> None:
+    client = TestClient(create_app())
+    resp1 = client.get("/openapi.json", headers={"Origin": "https://nene.siegpracht49.workers.dev"})
+    assert resp1.headers.get("access-control-allow-origin") == "https://nene.siegpracht49.workers.dev"
+
+    resp2 = client.get("/openapi.json", headers={"Origin": "https://preview-123.pages.dev"})
+    assert resp2.headers.get("access-control-allow-origin") == "https://preview-123.pages.dev"
+
+    resp3 = client.options(
+        "/openapi.json",
+        headers={
+            "Origin": "https://nene.siegpracht49.workers.dev",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert resp3.status_code == 200
+    assert resp3.headers.get("access-control-allow-origin") == "https://nene.siegpracht49.workers.dev"

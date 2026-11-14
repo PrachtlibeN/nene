@@ -47,3 +47,31 @@ def test_openai_api_key_is_masked_in_settings_representation() -> None:
     settings = Settings(_env_file=None, OPENAI_API_KEY="test-token")
 
     assert "test-token" not in repr(settings)
+
+
+def test_cors_origins_defaults_include_cloudflare_and_local() -> None:
+    settings = Settings(_env_file=None, OLLAMA_MODEL="test-model")
+    assert "https://nene.siegpracht49.workers.dev" in settings.cors_origins
+    assert "http://localhost:5173" in settings.cors_origins
+    assert settings.cors_origin_regex is not None
+
+
+@pytest.mark.parametrize(
+    "raw_input,expected",
+    [
+        ("https://a.com,https://b.com", ["https://a.com", "https://b.com"]),
+        ("https://single.com", ["https://single.com"]),
+        ('["https://json1.com", "https://json2.com"]', ["https://json1.com", "https://json2.com"]),
+        ("['https://single-quote.com']", ["https://single-quote.com"]),
+        ('["*"]', ["*"]),
+        ("*", ["*"]),
+        ("", []),
+    ],
+)
+def test_cors_origins_parsing_formats(raw_input: str, expected: list[str]) -> None:
+    settings = Settings(
+        _env_file=None,
+        OLLAMA_MODEL="test-model",
+        CORS_ORIGINS=raw_input,
+    )
+    assert settings.cors_origins == expected
