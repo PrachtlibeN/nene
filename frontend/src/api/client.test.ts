@@ -1,8 +1,8 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
-import { api, ApiError } from "./client";
+import { api, ApiError, getApiBaseUrl } from "./client";
 import { handlers } from "../mocks/handlers";
 
 const server = setupServer(...handlers);
@@ -33,6 +33,27 @@ describe("API Client", () => {
     await api.listScenarios();
 
     expect(requestUrl).toBe("http://localhost:8000/api/v1/scenarios");
+  });
+
+  describe("getApiBaseUrl", () => {
+    it("returns VITE_API_BASE_URL when defined", () => {
+      vi.stubEnv("VITE_API_BASE_URL", "https://custom.backend.com/api/v1/");
+      expect(getApiBaseUrl()).toBe("https://custom.backend.com/api/v1");
+      vi.unstubAllEnvs();
+    });
+
+    it("defaults to localhost in development/test environment", () => {
+      vi.stubEnv("VITE_API_BASE_URL", "");
+      expect(getApiBaseUrl()).toBe("http://localhost:8000/api/v1");
+      vi.unstubAllEnvs();
+    });
+
+    it("defaults to Render backend when PROD is true", () => {
+      vi.stubEnv("VITE_API_BASE_URL", "");
+      vi.stubEnv("PROD", true);
+      expect(getApiBaseUrl()).toBe("https://nene-i756.onrender.com/api/v1");
+      vi.unstubAllEnvs();
+    });
   });
 
   it("creates and starts a session", async () => {

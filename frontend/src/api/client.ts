@@ -50,9 +50,17 @@ type ApiPath = keyof paths;
 type ApiMethod<Path extends ApiPath> = Extract<keyof paths[Path], "get" | "post">;
 
 const API_PREFIX = "/api/v1";
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1"
-).replace(/\/+$/, "");
+
+export function getApiBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/+$/, "");
+  }
+  if (import.meta.env.PROD) {
+    return "https://nene-i756.onrender.com/api/v1";
+  }
+  return "http://localhost:8000/api/v1";
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -75,8 +83,9 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const headers: Record<string, string> = {};
+  const baseUrl = getApiBaseUrl();
   const suffix = path.startsWith(API_PREFIX) ? path.slice(API_PREFIX.length) : path;
-  const url = `${API_BASE_URL}${suffix}`;
+  const url = `${baseUrl}${suffix}`;
 
   if (!isFormData) {
     headers["Content-Type"] = "application/json";
