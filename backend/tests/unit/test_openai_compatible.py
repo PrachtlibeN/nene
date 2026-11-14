@@ -61,7 +61,7 @@ def test_chat_sends_compatible_payload_and_parses_usage() -> None:
         "model": "cloud-test-model",
         "messages": [{"role": "user", "content": "Hello"}],
         "temperature": 0.4,
-        "max_tokens": 80,
+        "max_completion_tokens": 80,
         "response_format": {"type": "json_object"},
     }
     assert result.content == "A useful response."

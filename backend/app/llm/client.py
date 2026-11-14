@@ -48,7 +48,7 @@ class OpenAICompatibleClient:
             "model": profile_config.model,
             "messages": [asdict(message) for message in messages],
             "temperature": profile_config.temperature,
-            "max_tokens": profile_config.max_tokens,
+            "max_completion_tokens": profile_config.max_tokens,
         }
         if json_mode or json_schema is not None:
             payload["response_format"] = {"type": "json_object"}

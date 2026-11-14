@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Status | **APPROVED v0.3 – Phase 0 implementation in progress (approval recorded 2026-11-13).** |
-| Version | 0.3.0 (contract version 0.3.0) |
+| Status | **Approved v0.3 architecture; see [current project status](../PROJECT_STATUS.md) for implementation and acceptance gaps.** |
+| Version | 0.3.0 (API contract v0.4.0) |
 | Owner | Principal Architect / Tech Lead |
 | Related | [API contracts](../api-contracts/API_CONTRACTS.md), [Database schema](./database-schema.md), [Development plan](./development-plan.md) |
 
@@ -71,7 +71,8 @@ echorole/
 │   │   │   ├── ids.py               # prefixed id generation
 │   │   │   └── logging.py           # request_id middleware
 │   │   ├── llm/                     # M2 LLM Gateway
-│   │   │   ├── client.py            # LLMClient protocol + OllamaClient
+│   │   │   ├── client.py            # OllamaClient + OpenAICompatibleClient
+│   │   │   ├── interfaces.py        # LLMClient protocol and shared types
 │   │   │   └── fake.py              # FakeLLMClient (tests, parallel dev)
 │   │   ├── roleplay/                # M3 Roleplay Agent
 │   │   │   ├── agent.py             # RoleplayAgent
@@ -382,11 +383,11 @@ Validated at startup by `core/config.py` (pydantic-settings); invalid or missing
 | `ECHOROLE_DB_URL` | no | `sqlite:///./data/echorole.db` | Database |
 | `CORS_ORIGINS` | no | `http://localhost:5173` | Allowed origins |
 | `OLLAMA_BASE_URL` | no | `http://localhost:11434` | Ollama endpoint |
-| `LLM_PROVIDER` | no | `ollama` | Select `ollama` or `openai_compatible` |
-| `OPENAI_BASE_URL` | for cloud provider | *(empty)* | OpenAI-compatible chat-completions base URL |
+| `LLM_PROVIDER` | no | Code default `ollama`; `.env.example` selects `openai_compatible` | Select `ollama` or `openai_compatible` |
+| `OPENAI_BASE_URL` | for cloud provider | Code default is OpenAI; `.env.example` uses Groq | OpenAI-compatible chat-completions base URL |
 | `OPENAI_API_KEY` | for cloud provider | *(empty)* | Provider key; must not be logged or persisted |
-| `OPENAI_MODEL` | for cloud provider | *(empty)* | Configured cloud model name |
-| `OLLAMA_MODEL` | **yes** | *(none – no code default)* | Model used by all profiles unless overridden |
+| `OPENAI_MODEL` | for cloud provider | No code default; `.env.example` has a sample ID | Configured cloud model name; verify account access |
+| `OLLAMA_MODEL` | when `LLM_PROVIDER=ollama` | *(none – no code default)* | Model used by all profiles unless overridden |
 | `OLLAMA_MODEL_ROLEPLAY` | no | falls back to `OLLAMA_MODEL` | Override for the `roleplay` profile |
 | `OLLAMA_MODEL_EVALUATION` | no | falls back to `OLLAMA_MODEL` | Override for the `evaluation` profile |
 | `OLLAMA_NUM_CTX` | no | `4096` | Context window requested from Ollama |
@@ -406,7 +407,11 @@ The numeric defaults are generation tunables, not model choices; they may be cha
 Structured JSON logs; `X-Request-ID` header accepted or generated and echoed on every response. Never log full transcripts at INFO.
 
 ### 7.5 Privacy
-All processing local. Audio is never stored. Transcripts stored in local SQLite only.
+Speech recognition and database storage are local. Audio is never stored;
+transcripts and results are stored in local SQLite. When an OpenAI-compatible
+cloud provider is selected, prompts and transcript text are sent to that
+provider for generation; use the provider's data policy when deciding what
+content to submit.
 
 ### 7.6 Performance budget (targets; validated by the benchmark, §7.11)
 Measured on the target hardware tier (§7.10), not on any model assumption:
@@ -420,11 +425,11 @@ Unit (per module, with `FakeLLMClient` / fake STT) → contract tests (responses
 
 ### 7.8 LLM configuration and model switching
 - **Single point of model knowledge.** `llm/client.py` holds a `ProfileConfig` per profile: `{model, temperature, max_tokens, num_ctx, timeout_s}`, built from §7.3. Agents call `chat(profile=…)`.
-- **To switch models:** `ollama pull <model>` → edit `OLLAMA_MODEL` (or the per-profile override) → restart. No code, prompt, schema or migration change. The model actually used is recorded in `conversations.model` and `evaluations.model`, so historical results stay interpretable.
+- **To switch providers/models:** for Ollama, pull the model and edit `OLLAMA_MODEL`; for an OpenAI-compatible provider, configure `OPENAI_BASE_URL`, `OPENAI_MODEL`, and `OPENAI_API_KEY`. Restart the backend after changing `.env`. No prompt, schema or migration change is needed. The configured model is recorded in `conversations.model` and `evaluations.model`, so historical results stay interpretable.
 - **Model-agnostic prompts.** Prompts use plain chat roles and avoid model-specific templates or tokens (Ollama applies each model's chat template). Behavioural requirements are verified, not assumed, by the opt-in LLM behaviour suite (`pytest -m llm`, §7.11) against whatever model is configured.
 - **Recording the model.** Services (M4 for the roleplay conversation, M6 for each evaluation conversation) store `model_for(profile)` in the new row; `LLMResult.model` is stored in turn/evaluation metadata. Neither agent ever sees or passes a model name.
 - **One model by default.** `OLLAMA_MODEL_EVALUATION` exists so a stronger model can score sessions asynchronously, but using two models on a memory-limited machine forces Ollama to swap models (extra load time). The default and recommendation is a single model for both profiles.
-- **Health.** `/health` reports whether Ollama is reachable and whether each configured model is installed (`LLM_MODEL_NOT_FOUND` guidance includes the `ollama pull` command).
+- **Health.** `/health` reports the active provider's status and whether each configured model is available. Model errors use provider-specific guidance; Ollama errors include the `ollama pull` hint.
 
 ### 7.9 Speech configuration (English-only MVP)
 - Language is fixed to English. Non-`.en` models are invoked with `language="en"` forced (no auto-detect, so no wrong-language drift).
@@ -442,7 +447,7 @@ Unit (per module, with `FakeLLMClient` / fake STT) → contract tests (responses
 - Recognition errors reach the Coach as text. The Coach prompt tells it to ignore likely transcription artefacts (punctuation, odd spellings) when judging language accuracy, and the UI lets the user edit the transcript before sending.
 
 ### 7.10 Hardware requirements and fallback options
-Software: Python 3.11+, Node 20+, Ollama installed locally, ≈10 GB free disk for models. **The figures below are planning estimates for typical 4-bit-quantised Ollama models; the benchmark (§7.11) replaces them with measured numbers for the actual demo machine.**
+Software: Python 3.11+, Node 20+; Ollama and model disk space are needed only for local inference. **The figures below are planning estimates for typical 4-bit-quantised Ollama models; the benchmark (§7.11) replaces them with measured numbers for the actual demo machine.**
 
 | Tier | Machine | LLM class (illustrative candidates) | STT | Expectation |
 |---|---|---|---|---|

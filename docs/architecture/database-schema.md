@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **APPROVED v0.3 – Phase 0 implementation in progress (approval recorded 2026-11-13).** |
+| Status | **Approved v0.3; implemented through Alembic `0002`. See [current project status](../PROJECT_STATUS.md) for acceptance gaps.** |
 | Version | 0.3.0 |
 | Engine | SQLite 3 (WAL), SQLAlchemy 2.0, Alembic |
 | Owner | M1 Platform |

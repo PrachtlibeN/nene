@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **APPROVED v0.3 – Phase 0 implementation in progress (approval recorded 2026-11-13).** |
+| Status | **Approved contract; implemented through v0.4.0. See [current project status](../PROJECT_STATUS.md) for runtime/acceptance gaps.** |
 | Contract version | **0.4.0** (bump on every contract change) |
 | Base URL | `http://localhost:8000/api/v1` |
 | Source of truth | This file → mirrored by `backend/app/schemas/` (Pydantic) → canonical JSON in `docs/api-contracts/examples/` → generated TS types in `frontend/src/api/` and MSW mocks |
@@ -78,10 +78,10 @@
 | 422 | `AUDIO_EMPTY_OR_SILENT` | M5 | No speech detected (not an error for the UI to hide; prompt user to retry) |
 | 500 | `INTERNAL_ERROR` | M1 | Unhandled |
 | 501 | `NOT_IMPLEMENTED` | any | **Phase 0 router stubs only.** Removed from each endpoint as its module ships; never returned by a released module |
-| 502 | `LLM_BAD_OUTPUT` | M2 | LLM returned unusable output for a plain-text call |
+| 502 | `LLM_BAD_OUTPUT` | M2 | Provider rejected a completion request or returned unusable output |
 | 502 | `EVALUATION_PARSE_FAILED` | M6 | Coach output invalid after one retry (bad JSON, missing/duplicate criterion, score not an integer 0–10, unknown evidence turn id). Appears as `error.code` inside a `failed` evaluation (§8.3), not as an HTTP status on the poll endpoint |
-| 503 | `LLM_UNAVAILABLE` | M2 | Configured LLM provider not reachable |
-| 503 | `LLM_MODEL_NOT_FOUND` | M2 | Configured Ollama model not pulled. `details.model`, hint to `ollama pull` |
+| 503 | `LLM_UNAVAILABLE` | M2 | Configured LLM provider is unreachable, rejects authentication/access, or remains rate-limited after retries |
+| 503 | `LLM_MODEL_NOT_FOUND` | M2 | Configured model is missing or inaccessible from the active provider; guidance is provider-specific (for Ollama, pull the configured model) |
 | 503 | `STT_NOT_READY` | M5 | Whisper model still loading / failed to load |
 | 504 | `LLM_TIMEOUT` | M2 | Configured LLM provider call exceeded timeout |
 
@@ -140,7 +140,7 @@ The Roleplay Agent, LLM Gateway and Evaluation Coach have **no public endpoints*
   }
 }
 ```
-`status` ∈ `ok | degraded`. Component `status` ∈ `ok | loading | unavailable`. Always returns 200 (never fails because a dependency is down). `llm.models` shows the models resolved from environment configuration for each profile; these are not hard-coded by the application. `llm.status` is `unavailable` with an explanatory `detail` when the selected provider is unreachable or a configured Ollama model is not installed. The Roleplay Agent and Coach are never told these names.
+`status` ∈ `ok | degraded`. Component `status` ∈ `ok | loading | unavailable`. Always returns 200 (never fails because a dependency is down). `llm.models` shows the models resolved from environment configuration for each profile; these are not hard-coded by the application. `llm.status` is `unavailable` with an explanatory `detail` when the selected provider is unreachable or a configured model is not available from that provider. The Roleplay Agent and Coach are never told these names.
 
 ---
 

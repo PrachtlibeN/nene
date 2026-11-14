@@ -1,15 +1,18 @@
 # EchoRole
 
-Local-first practice for realistic communication scenarios. The backend runs
-roleplay and evaluation through Ollama by default, with an optional
-OpenAI-compatible cloud provider; speech recognition uses a local
-faster-whisper model, and browser speech synthesis speaks interviewer replies.
+Local-first practice for realistic communication scenarios. Roleplay and
+evaluation use the provider selected by `LLM_PROVIDER`: local Ollama or an
+OpenAI-compatible API. Speech recognition uses a local faster-whisper model,
+and browser speech synthesis speaks interviewer replies.
+
+For current capabilities, validation results, and known gaps, see the
+[project status and handoff](docs/PROJECT_STATUS.md).
 
 ## Requirements
 
 - Python 3.11 or newer (validated on this machine with Python 3.14.0)
 - Node.js 20 or newer and npm (validated with Node.js 26.13.1 and npm 11.20.0)
-- Ollama with the model configured in `.env`
+- Ollama and a locally installed model only when `LLM_PROVIDER=ollama`
 
 ## Quickstart (PowerShell)
 
@@ -19,9 +22,11 @@ From the repository root, copy the recommended local configuration:
 Copy-Item .env.example .env
 ```
 
-The template selects Ollama, the locally installed candidate, and the cached
-Whisper model. [The benchmark report](docs/architecture/LLM_BENCHMARK.md)
-records benchmark coverage and any remaining acceptance gaps. Change
+The checked-in template selects an OpenAI-compatible Groq endpoint, leaves the
+API key blank, and includes a sample model ID. Confirm that the selected model
+is available to your account. To use Ollama, set `LLM_PROVIDER=ollama` and
+`OLLAMA_MODEL` to an installed model. [The benchmark report](docs/architecture/LLM_BENCHMARK.md)
+records local benchmark coverage and remaining acceptance gaps. Change
 `OLLAMA_MODEL` or `WHISPER_MODEL` in `.env` when using different local models.
 The 180-second LLM timeout and 1200-token
 Coach budget allow evaluation output to finish on the CPU-only benchmark

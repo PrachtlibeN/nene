@@ -90,7 +90,11 @@ export function getErrorMessage(
   fallbackMessage?: string | null,
 ): string {
   if (
-    (code === "LLM_UNAVAILABLE" || code === "LLM_MODEL_NOT_FOUND") &&
+    (
+      code === "LLM_BAD_OUTPUT" ||
+      code === "LLM_UNAVAILABLE" ||
+      code === "LLM_MODEL_NOT_FOUND"
+    ) &&
     fallbackMessage?.trim()
   ) {
     return fallbackMessage;

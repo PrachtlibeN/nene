@@ -38,11 +38,17 @@ describe("API Error Code Handling (API_CONTRACTS §2.2)", () => {
       );
     });
 
-    it.each(["LLM_UNAVAILABLE", "LLM_MODEL_NOT_FOUND"] as const)(
-      "uses the provider-specific server message for %s",
+    it.each([
+      "LLM_BAD_OUTPUT",
+      "LLM_UNAVAILABLE",
+      "LLM_MODEL_NOT_FOUND",
+    ] as const)(
+      "uses the server diagnostic for %s",
       (code) => {
         const providerMessage =
-          "The OpenAI-compatible endpoint returned HTTP 404. Verify OPENAI_BASE_URL.";
+          code === "LLM_BAD_OUTPUT"
+            ? "OpenAI-compatible provider rejected the request."
+            : "The OpenAI-compatible endpoint returned HTTP 404. Verify OPENAI_BASE_URL.";
         expect(getErrorMessage(code, providerMessage)).toBe(providerMessage);
       },
     );
