@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | **APPROVED v0.3 – Phase 0 implementation in progress (approval recorded 2026-11-13).** |
-| Contract version | **0.3.0** (bump on every contract change) |
+| Contract version | **0.4.0** (bump on every contract change) |
 | Base URL | `http://localhost:8000/api/v1` |
 | Source of truth | This file → mirrored by `backend/app/schemas/` (Pydantic) → canonical JSON in `docs/api-contracts/examples/` → generated TS types in `frontend/src/api/` and MSW mocks |
 | Change process | PR labelled `contract-change` (see SYSTEM_ARCHITECTURE §8). **Nobody adds, renames or removes fields outside this process.** |
@@ -15,6 +15,7 @@
 | Version | Changes |
 |---|---|
 | 0.3.0 | **Clarifications (no endpoint added or removed):** idle-timeout (lazy abandonment) rules specified in new §6.9; `EvaluationOut.model` and `coach_conversation_id` nullability defined (`null` only while `pending`); evaluation of an `abandoned` session returns `SESSION_NOT_ENDED` with `details.status`. Health `contract_version` bumped. |
+| 0.4.0 | Adds optional panel personas, speaker identity on turns, and `interviewer_turns` arrays while preserving `interviewer_turn` for compatibility. |
 | 0.2.0 | **Evaluation:** rubric with explicit weights and band descriptions (§8.1); `CoachResult` (LLM output: criterion scores + evidence + qualitative text) separated from `EvaluationResult` (backend-composed, includes backend-computed `overall_score`, `weight_percent`, `weighted_points`); `rubric_version` added; `metrics` and `result` explicitly separate, Coach receives no metrics. **Speech:** English-only; `language` request part removed from `POST /speech/transcribe`; `/speech/status` reports `language:"en"`. **Scenarios:** `language` fixed to `"en"`, `language` query removed. **Health:** reports configured models per profile. **Errors:** added `SESSION_TOO_SHORT` (409) and `NOT_IMPLEMENTED` (501, Phase 0 stubs only). No model name appears in any contract. |
 | 0.1.0 | Initial draft. |
 
@@ -79,10 +80,10 @@
 | 501 | `NOT_IMPLEMENTED` | any | **Phase 0 router stubs only.** Removed from each endpoint as its module ships; never returned by a released module |
 | 502 | `LLM_BAD_OUTPUT` | M2 | LLM returned unusable output for a plain-text call |
 | 502 | `EVALUATION_PARSE_FAILED` | M6 | Coach output invalid after one retry (bad JSON, missing/duplicate criterion, score not an integer 0–10, unknown evidence turn id). Appears as `error.code` inside a `failed` evaluation (§8.3), not as an HTTP status on the poll endpoint |
-| 503 | `LLM_UNAVAILABLE` | M2 | Ollama not reachable |
-| 503 | `LLM_MODEL_NOT_FOUND` | M2 | Configured model not pulled. `details.model`, hint to `ollama pull` |
+| 503 | `LLM_UNAVAILABLE` | M2 | Configured LLM provider not reachable |
+| 503 | `LLM_MODEL_NOT_FOUND` | M2 | Configured Ollama model not pulled. `details.model`, hint to `ollama pull` |
 | 503 | `STT_NOT_READY` | M5 | Whisper model still loading / failed to load |
-| 504 | `LLM_TIMEOUT` | M2 | Ollama call exceeded timeout |
+| 504 | `LLM_TIMEOUT` | M2 | Configured LLM provider call exceeded timeout |
 
 ### 2.3 Rules
 
@@ -127,7 +128,7 @@ The Roleplay Agent, LLM Gateway and Evaluation Coach have **no public endpoints*
 {
   "status": "ok",
   "version": "0.1.0",
-  "contract_version": "0.3.0",
+  "contract_version": "0.4.0",
   "components": {
     "database": { "status": "ok" },
     "llm": {
@@ -139,7 +140,7 @@ The Roleplay Agent, LLM Gateway and Evaluation Coach have **no public endpoints*
   }
 }
 ```
-`status` ∈ `ok | degraded`. Component `status` ∈ `ok | loading | unavailable`. Always returns 200 (never fails because a dependency is down). `llm.models` shows the models resolved from environment configuration for each profile (values come from `OLLAMA_MODEL*`; the strings above are placeholders). `llm.status` is `unavailable` with an explanatory `detail` when Ollama is unreachable or a configured model is not installed. The Roleplay Agent and Coach are never told these names.
+`status` ∈ `ok | degraded`. Component `status` ∈ `ok | loading | unavailable`. Always returns 200 (never fails because a dependency is down). `llm.models` shows the models resolved from environment configuration for each profile; these are not hard-coded by the application. `llm.status` is `unavailable` with an explanatory `detail` when the selected provider is unreachable or a configured Ollama model is not installed. The Roleplay Agent and Coach are never told these names.
 
 ---
 
@@ -157,7 +158,25 @@ The Roleplay Agent, LLM Gateway and Evaluation Coach have **no public endpoints*
   "language": "en",                // always "en" in the MVP
   "difficulty": 2,                 // 1..3
   "max_turns": 8,
-  "estimated_minutes": 10
+  "estimated_minutes": 10,
+  "personas": [
+    {
+      "id": "engineering-manager",
+      "name": "Alex",
+      "role_title": "Engineering Manager",
+      "focus_area": "Technical & Execution",
+      "voice_gender": "male",
+      "persona_prompt": "Probe technical decisions, ownership, and measurable execution."
+    },
+    {
+      "id": "people-partner",
+      "name": "Sarah",
+      "role_title": "People Partner",
+      "focus_area": "Leadership & Conflict",
+      "voice_gender": "female",
+      "persona_prompt": "Explore collaboration, leadership, and conflict resolution."
+    }
+  ]
 }
 
 // ScenarioOut  = ScenarioSummary + definition
@@ -178,7 +197,8 @@ The Roleplay Agent, LLM Gateway and Evaluation Coach have **no public endpoints*
         "Stays composed when challenged"
       ]
     },
-    "evaluation_focus": ["structure", "relevance", "composure"]   // criteria the Coach elaborates on in feedback; does NOT change rubric weights
+    "evaluation_focus": ["structure", "relevance", "composure"],  // criteria the Coach elaborates on in feedback; does NOT change rubric weights
+    "personas": [ /* same two Persona objects as ScenarioSummary.personas */ ]
   }
 }
 ```
@@ -232,6 +252,8 @@ The Roleplay Agent, LLM Gateway and Evaluation Coach have **no public endpoints*
   "text": "In my last role I led a migration…",
   "source": "speech",              // typed | speech | generated
   "speech_meta": { /* SpeechMeta */ },   // null unless source = speech
+  "speaker_id": null,              // panel persona id; null for legacy interviewer/candidate turns
+  "speaker_name": null,             // panel persona name; null for legacy interviewer/candidate turns
   "created_at": "2026-11-13T10:15:40Z"
 }
 ```
@@ -266,9 +288,14 @@ Moves `created → active` and generates the interviewer's opening line via the 
 ```json
 {
   "session": { /* SessionOut, status:"active" */ },
-  "interviewer_turn": { /* TurnOut, idx 0, speaker:"interviewer", source:"generated" */ }
+  "interviewer_turn": { /* TurnOut: the final opening turn */ },
+  "interviewer_turns": [
+    { /* TurnOut, idx 0, first panel persona */ },
+    { /* TurnOut, idx 1, second panel persona and first question */ }
+  ]
 }
 ```
+`interviewer_turns` contains the one or two new opening turns. `interviewer_turn` remains the final item for clients using the original contract.
 **Errors:** 404 `SESSION_NOT_FOUND`; 409 `SESSION_INVALID_STATE`; 503/504/502 LLM errors (session stays `created`).
 
 ### 6.6 `POST /sessions/{session_id}/turns`
@@ -292,11 +319,13 @@ Submit the candidate's utterance (text from typing or from STT); receive the int
 ```json
 {
   "candidate_turn": { /* TurnOut */ },
-  "interviewer_turn": { /* TurnOut */ },
+  "interviewer_turn": { /* TurnOut: final interviewer response */ },
+  "interviewer_turns": [ /* one or two generated TurnOut items in transcript order */ ],
   "session": { /* SessionOut (may now be status:"ended") */ }
 }
 ```
 Rules:
+- `interviewer_turns` lists every interviewer line generated for this candidate response. The compatibility field `interviewer_turn` equals its last item.
 - If this turn reaches `max_turns` **or** the Roleplay Agent returns `should_end=true`, the interviewer turn is a closing remark and `session.status="ended"` with `end_reason` `max_turns` | `agent_concluded`.
 - Atomic: on any error nothing is persisted.
 

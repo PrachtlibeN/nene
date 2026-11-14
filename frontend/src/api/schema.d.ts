@@ -449,6 +449,8 @@ export interface components {
             task: components["schemas"]["ScenarioTask"];
             /** Evaluation Focus */
             evaluation_focus: components["schemas"]["ScenarioCriterion"][];
+            /** Personas */
+            personas?: components["schemas"]["ScenarioPanelPersona"][];
         };
         /** ScenarioListOut */
         ScenarioListOut: {
@@ -478,7 +480,27 @@ export interface components {
             max_turns: number;
             /** Estimated Minutes */
             estimated_minutes: number;
+            /** Personas */
+            personas?: components["schemas"]["ScenarioPanelPersona"][];
             definition: components["schemas"]["ScenarioDefinition"];
+        };
+        /** ScenarioPanelPersona */
+        ScenarioPanelPersona: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Role Title */
+            role_title: string;
+            /** Focus Area */
+            focus_area: string;
+            /**
+             * Voice Gender
+             * @enum {string}
+             */
+            voice_gender: "male" | "female";
+            /** Persona Prompt */
+            persona_prompt: string;
         };
         /** ScenarioPersona */
         ScenarioPersona: {
@@ -512,6 +534,8 @@ export interface components {
             max_turns: number;
             /** Estimated Minutes */
             estimated_minutes: number;
+            /** Personas */
+            personas?: components["schemas"]["ScenarioPanelPersona"][];
         };
         /** ScenarioTask */
         ScenarioTask: {
@@ -600,6 +624,8 @@ export interface components {
         StartSessionOut: {
             session: components["schemas"]["SessionOut"];
             interviewer_turn: components["schemas"]["TurnOut"];
+            /** Interviewer Turns */
+            interviewer_turns?: components["schemas"]["TurnOut"][];
         };
         /** Strength */
         Strength: {
@@ -686,6 +712,10 @@ export interface components {
             text: string;
             source: components["schemas"]["TurnSource"];
             speech_meta: components["schemas"]["SpeechMeta"] | null;
+            /** Speaker Id */
+            speaker_id?: string | null;
+            /** Speaker Name */
+            speaker_name?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -702,6 +732,8 @@ export interface components {
             candidate_turn: components["schemas"]["TurnOut"];
             interviewer_turn: components["schemas"]["TurnOut"];
             session: components["schemas"]["SessionOut"];
+            /** Interviewer Turns */
+            interviewer_turns?: components["schemas"]["TurnOut"][];
         };
     };
     responses: never;

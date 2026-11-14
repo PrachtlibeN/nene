@@ -39,10 +39,26 @@ class ScenarioTask(ContractModel):
     success_criteria: Annotated[list[NonEmptyText], Field(min_length=1, max_length=10)]
 
 
+class ScenarioPanelPersona(ContractModel):
+    id: NonEmptyText
+    name: NonEmptyText
+    role_title: NonEmptyText
+    focus_area: NonEmptyText
+    voice_gender: Literal["male", "female"]
+    persona_prompt: NonEmptyText
+
+
 class ScenarioDefinition(ContractModel):
     persona: ScenarioPersona
     task: ScenarioTask
     evaluation_focus: Annotated[list[ScenarioCriterion], Field(min_length=1, max_length=6)]
+    personas: list[ScenarioPanelPersona] = Field(default_factory=list, max_length=2)
+
+    @model_validator(mode="after")
+    def validate_panel_personas(self) -> ScenarioDefinition:
+        if self.personas and len(self.personas) != 2:
+            raise ValueError("personas must contain exactly two panel agents")
+        return self
 
 
 class ScenarioSummary(ContractModel):
@@ -54,6 +70,7 @@ class ScenarioSummary(ContractModel):
     difficulty: int = Field(ge=1, le=3)
     max_turns: int = Field(ge=1, le=30)
     estimated_minutes: int = Field(ge=1)
+    personas: list[ScenarioPanelPersona] = Field(default_factory=list, max_length=2)
 
 
 class ScenarioOut(ScenarioSummary):
@@ -119,6 +136,8 @@ class TurnOut(ContractModel):
     text: str
     source: TurnSource
     speech_meta: SpeechMeta | None
+    speaker_id: str | None = None
+    speaker_name: str | None = None
     created_at: datetime
 
 
@@ -144,12 +163,14 @@ class ScenarioListOut(ContractModel):
 class StartSessionOut(ContractModel):
     session: SessionOut
     interviewer_turn: TurnOut
+    interviewer_turns: list[TurnOut] = Field(default_factory=list)
 
 
 class TurnSubmitOut(ContractModel):
     candidate_turn: TurnOut
     interviewer_turn: TurnOut
     session: SessionOut
+    interviewer_turns: list[TurnOut] = Field(default_factory=list)
 
 
 class TurnListOut(ContractModel):

@@ -92,7 +92,7 @@ def get_health(request: Request) -> HealthOut:
     return HealthOut(
         status=overall_status,
         version="0.1.0",
-        contract_version="0.3.0",
+        contract_version="0.4.0",
         components=HealthComponents(
             database=database,
             llm=llm,

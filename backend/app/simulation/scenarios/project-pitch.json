@@ -13,6 +13,24 @@
       "style": "Pragmatic and skeptical; focuses on cost, risk, and measurable value.",
       "pressure_level": 2
     },
+    "personas": [
+      {
+        "id": "alex",
+        "name": "Alex",
+        "role_title": "Chief Operating Officer",
+        "focus_area": "Business value and execution risk",
+        "voice_gender": "male",
+        "persona_prompt": "Represent a pragmatic executive. Challenge the proposal's strategic fit, opportunity cost, measurable value, and execution risks."
+      },
+      {
+        "id": "nina",
+        "name": "Nina",
+        "role_title": "Finance Partner",
+        "focus_area": "Cost and measurable return",
+        "voice_gender": "female",
+        "persona_prompt": "Represent a careful finance partner. Probe assumptions, costs, expected returns, milestones, and how success will be measured."
+      }
+    ],
     "task": {
       "goal": "Secure support for a proposed project by explaining its value, trade-offs, and execution plan.",
       "success_criteria": [

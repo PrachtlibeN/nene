@@ -1,18 +1,23 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { setupServer } from "msw/node";
 
 import App from "./App";
+import { api } from "./api/client";
 import { handlers } from "./mocks/handlers";
 
 const server = setupServer(...handlers);
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  vi.restoreAllMocks();
+});
 afterAll(() => server.close());
 
 describe("EchoRole App Integration", () => {
   it("navigates through the entire flow: scenarios -> session -> feedback", async () => {
+    const submitTurn = vi.spyOn(api, "submitTurn");
     render(<App />);
 
     // Step 1: Scenarios screen loaded
@@ -38,7 +43,7 @@ describe("EchoRole App Integration", () => {
     });
 
     // Wait until speech finishes and typed input is enabled
-    const typedInput = screen.getByPlaceholderText(/type your answer here/i);
+    const typedInput = screen.getByLabelText(/or type response/i);
     await waitFor(() => {
       expect(typedInput).not.toBeDisabled();
     });
@@ -47,10 +52,16 @@ describe("EchoRole App Integration", () => {
     fireEvent.change(typedInput, {
       target: { value: "I led a cross-functional payment system migration." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /send typed answer/i }));
+    const sendAnswerButton = screen.getByRole("button", {
+      name: /send typed answer/i,
+    });
+    expect(typedInput).toHaveValue("I led a cross-functional payment system migration.");
+    expect(sendAnswerButton).toBeEnabled();
+    fireEvent.click(sendAnswerButton);
 
     // Verify interviewer reply received
     await waitFor(() => {
+      expect(submitTurn).toHaveBeenCalledOnce();
       expect(
         screen.getByText("What was the measurable outcome?"),
       ).toBeInTheDocument();

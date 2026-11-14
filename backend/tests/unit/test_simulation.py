@@ -71,6 +71,46 @@ class CapturingAgent(StubRoleplayAgent):
         return super().respond(ctx, candidate_text)
 
 
+class PanelAgent(StubRoleplayAgent):
+    def open_session(self, ctx: RoleplayContext) -> list[RoleplayReply]:
+        return [
+            RoleplayReply(
+                text="Welcome. We will discuss your project.",
+                should_end=False,
+                llm=LLMMeta(model="test-model", latency_ms=1),
+                speaker_id="alex",
+                speaker_name="Alex",
+            ),
+            RoleplayReply(
+                text="What project did you lead under pressure?",
+                should_end=False,
+                llm=LLMMeta(model="test-model", latency_ms=1),
+                speaker_id="sarah",
+                speaker_name="Sarah",
+            ),
+        ]
+
+    def respond(
+        self, ctx: RoleplayContext, candidate_text: str
+    ) -> list[RoleplayReply]:
+        return [
+            RoleplayReply(
+                text="Explain your technical decision.",
+                should_end=False,
+                llm=LLMMeta(model="test-model", latency_ms=1),
+                speaker_id="alex",
+                speaker_name="Alex",
+            ),
+            RoleplayReply(
+                text="How did you resolve the disagreement?",
+                should_end=False,
+                llm=LLMMeta(model="test-model", latency_ms=1),
+                speaker_id="sarah",
+                speaker_name="Sarah",
+            ),
+        ]
+
+
 @pytest.fixture
 def environment(tmp_path):
     clock = FixedClock()
@@ -194,6 +234,64 @@ def test_session_create_start_turn_history_end_and_m6_interface(environment) -> 
         assert conversation.id == created.json()["roleplay_conversation_id"]
         scenario = service.get_transcript(session_id).scenario
         assert conversation.system_prompt == build_roleplay_prompt(scenario)
+
+
+def test_panel_start_and_turn_responses_preserve_legacy_final_turn_and_speaker_ids(
+    tmp_path,
+) -> None:
+    clock = FixedClock()
+    with _client_environment(tmp_path, clock, PanelAgent()) as (client, _):
+        scenarios = client.get("/api/v1/scenarios").json()
+        scenario_summary = scenarios["items"][0]
+        assert [persona["name"] for persona in scenario_summary["personas"]] == [
+            "Alex",
+            "Sarah",
+        ]
+        created = client.post(
+            "/api/v1/sessions",
+            json={"scenario_id": scenario_summary["id"]},
+        )
+        session_id = created.json()["id"]
+
+        started = client.post(f"/api/v1/sessions/{session_id}/start", json={})
+
+        assert started.status_code == 200
+        start_data = started.json()
+        assert [turn["speaker_id"] for turn in start_data["interviewer_turns"]] == [
+            "alex",
+            "sarah",
+        ]
+        assert start_data["interviewer_turn"]["id"] == start_data["interviewer_turns"][-1]["id"]
+        assert [turn["idx"] for turn in start_data["interviewer_turns"]] == [0, 1]
+
+        response = _submit(client, session_id)
+
+        assert response.status_code == 200
+        result = response.json()
+        assert [turn["speaker_id"] for turn in result["interviewer_turns"]] == [
+            "alex",
+            "sarah",
+        ]
+        assert result["interviewer_turn"]["id"] == result["interviewer_turns"][-1]["id"]
+        assert [turn["idx"] for turn in result["interviewer_turns"]] == [3, 4]
+        assert result["candidate_turn"]["idx"] == 2
+        assert result["session"]["turn_count"] == 1
+
+        service = client.app.state.simulation_service
+        with service.session_factory() as db:
+            messages = db.scalars(
+                select(Message)
+                .where(
+                    Message.conversation_id
+                    == start_data["session"]["roleplay_conversation_id"]
+                )
+                .order_by(Message.seq)
+            ).all()
+        assistant_content = [message.content for message in messages if message.role == "assistant"]
+        assert assistant_content[0].startswith("[Alex - Engineering Manager]:")
+        assert assistant_content[1].startswith("[Sarah - People Partner]:")
+        assert assistant_content[2].startswith("[Alex - Engineering Manager]:")
+        assert assistant_content[3].startswith("[Sarah - People Partner]:")
 
 
 def test_agent_conclusion_ends_automatically(tmp_path) -> None:

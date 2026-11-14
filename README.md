@@ -1,7 +1,8 @@
 # EchoRole
 
 Local-first practice for realistic communication scenarios. The backend runs
-roleplay and evaluation through Ollama; speech recognition uses a local
+roleplay and evaluation through Ollama by default, with an optional
+OpenAI-compatible cloud provider; speech recognition uses a local
 faster-whisper model, and browser speech synthesis speaks interviewer replies.
 
 ## Requirements
@@ -18,13 +19,28 @@ From the repository root, copy the recommended local configuration:
 Copy-Item .env.example .env
 ```
 
-The template currently selects the locally installed Ollama candidate and the
-cached Whisper model. [The benchmark report](docs/architecture/LLM_BENCHMARK.md)
+The template selects Ollama, the locally installed candidate, and the cached
+Whisper model. [The benchmark report](docs/architecture/LLM_BENCHMARK.md)
 records benchmark coverage and any remaining acceptance gaps. Change
 `OLLAMA_MODEL` or `WHISPER_MODEL` in `.env` when using different local models.
 The 180-second LLM timeout and 1200-token
 Coach budget allow evaluation output to finish on the CPU-only benchmark
 machine; evaluations run asynchronously and the frontend polls for their result.
+
+### OpenAI-compatible cloud providers
+
+To use a cloud provider, set `LLM_PROVIDER=openai_compatible` in `.env`, then
+configure `OPENAI_BASE_URL`, `OPENAI_MODEL`, and `OPENAI_API_KEY`. The key is
+blank in the template; provide your own key locally and never commit it. An
+empty key omits bearer authentication, which is useful for compatible local
+services. The backend sends standard `/chat/completions` requests and uses
+`/models` for provider health checks.
+
+For example, Groq uses a base URL such as
+`https://api.groq.com/openai/v1`; Gemini's OpenAI-compatible API uses
+`https://generativelanguage.googleapis.com/v1beta/openai/`. Use a model name
+supported by the selected provider. Replace the base URL, model, and key in
+your local `.env`; do not put credentials in this file in version control.
 
 Backend, in terminal 1:
 

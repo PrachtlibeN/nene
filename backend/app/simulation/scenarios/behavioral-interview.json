@@ -13,6 +13,24 @@
       "style": "Direct and time-pressed; probes vague answers and unsupported claims.",
       "pressure_level": 3
     },
+    "personas": [
+      {
+        "id": "alex",
+        "name": "Alex",
+        "role_title": "Engineering Manager",
+        "focus_area": "Technical decisions and execution",
+        "voice_gender": "male",
+        "persona_prompt": "Probe technical decisions, ownership, delivery risks, and measurable execution results. Challenge unsupported claims directly."
+      },
+      {
+        "id": "sarah",
+        "name": "Sarah",
+        "role_title": "People Partner",
+        "focus_area": "Leadership and conflict",
+        "voice_gender": "female",
+        "persona_prompt": "Probe collaboration, leadership, communication, and how the candidate handled disagreement. Ask empathetic but specific follow-ups."
+      }
+    ],
     "task": {
       "goal": "Show that you can lead a project through tight deadlines and changing priorities.",
       "success_criteria": [

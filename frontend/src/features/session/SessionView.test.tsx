@@ -6,6 +6,7 @@ import { SessionView } from "./SessionView";
 import {
   scenarioExample,
   sessionExample,
+  startSessionExample,
   turnExample,
 } from "../../mocks/examples";
 import { handlers } from "../../mocks/handlers";
@@ -22,15 +23,20 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
       <SessionView
         initialSession={sessionExample}
         scenario={scenarioExample}
-        initialTurn={turnExample}
+        initialTurns={startSessionExample.interviewer_turns}
         onViewFeedback={vi.fn()}
       />,
     );
 
     expect(screen.getByText("Behavioral Job Interview")).toBeInTheDocument();
-    expect(screen.getAllByText("Dana Whitfield").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Panel:/)).toBeInTheDocument();
+    expect(screen.getByText("Alex")).toBeInTheDocument();
+    expect(screen.getByText("Sarah")).toBeInTheDocument();
     expect(
       screen.getByText("Tell me about a project you led under a tight deadline."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Welcome. We will discuss how you led a project under pressure."),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /push to talk|microphone locked/i }),

@@ -18,6 +18,7 @@ from app.core.ids import new_id
 from app.evaluation.coach import EvaluationCoach, EvaluationParseError
 from app.evaluation.interfaces import CoachContext, CoachScenario
 from app.evaluation.metrics import compute_delivery_metrics
+from app.evaluation.prompts import build_coach_user_prompt
 from app.evaluation.router import get_llm_client
 from app.evaluation.rubric import CRITERIA, RUBRIC_DESCRIPTIONS
 from app.evaluation.service import EvaluationService
@@ -39,6 +40,7 @@ from app.roleplay.interfaces import StubRoleplayAgent
 from app.schemas.contracts import (
     ScenarioCriterion,
     ScenarioDefinition,
+    ScenarioPanelPersona,
     ScenarioPersona,
     ScenarioTask,
     SpeechMeta,
@@ -296,6 +298,49 @@ def test_speech_metrics_are_null_without_speech_turns() -> None:
     assert metrics.speaking_time_ms is None
     assert metrics.words_per_minute is None
     assert metrics.avg_stt_confidence is None
+
+
+def test_coach_transcript_labels_both_panel_agents_without_delivery_metrics() -> None:
+    scenario = CoachScenario(
+        task_goal="Describe the project.",
+        success_criteria=["Explain the result."],
+        evaluation_focus=[ScenarioCriterion.STRUCTURE],
+        personas=[
+            ScenarioPanelPersona(
+                id="alex",
+                name="Alex",
+                role_title="Engineering Manager",
+                focus_area="Execution",
+                voice_gender="male",
+                persona_prompt="Probe execution.",
+            ),
+            ScenarioPanelPersona(
+                id="sarah",
+                name="Sarah",
+                role_title="People Partner",
+                focus_area="Leadership",
+                voice_gender="female",
+                persona_prompt="Probe leadership.",
+            ),
+        ],
+    )
+    turns = [
+        _turn("trn_candidate", "candidate", "I led the migration."),
+        _turn("trn_alex", "interviewer", "What did you own?").model_copy(
+            update={"speaker_id": "alex", "speaker_name": "Alex"}
+        ),
+        _turn("trn_sarah", "interviewer", "How did you handle conflict?").model_copy(
+            update={"speaker_id": "sarah", "speaker_name": "Sarah"}
+        ),
+    ]
+
+    prompt = build_coach_user_prompt(scenario, turns)
+
+    assert "[Candidate]: I led the migration." in prompt
+    assert "[Alex - Engineering Manager]: What did you own?" in prompt
+    assert "[Sarah - People Partner]: How did you handle conflict?" in prompt
+    assert "DeliveryMetrics" not in prompt
+    assert "words_per_minute" not in prompt
 
 
 def test_coach_uses_rubric_json_mode_and_discards_backend_fields() -> None:

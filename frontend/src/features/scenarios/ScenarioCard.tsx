@@ -40,6 +40,23 @@ export const ScenarioCard: React.FC<ScenarioCardProps> = ({
         <p className="mt-2 text-sm text-slate-600 line-clamp-3">
           {scenario.description}
         </p>
+        {scenario.personas?.length === 2 && (
+          <div className="mt-3 space-y-2">
+            <span className="inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700">
+              2-on-1 Panel
+            </span>
+            <div className="space-y-1">
+              {scenario.personas.map((persona, index) => (
+                <p key={persona.id} className="text-xs text-slate-600">
+                  <span className="font-semibold text-slate-800">
+                    AI #{index + 1}: {persona.name}
+                  </span>{" "}
+                  &middot; {persona.role_title}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">

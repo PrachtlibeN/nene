@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -10,6 +10,7 @@ from app.schemas.contracts import (
     CoachResult,
     ScenarioCriterion,
     ScenarioOut,
+    ScenarioPanelPersona,
     SessionOut,
     TurnOut,
 )
@@ -32,6 +33,7 @@ class CoachScenario:
     task_goal: str
     success_criteria: list[str]
     evaluation_focus: list[ScenarioCriterion]
+    personas: list[ScenarioPanelPersona] = field(default_factory=list)
 
 
 def to_coach_scenario(scenario: ScenarioOut | CoachScenario) -> CoachScenario:
@@ -41,6 +43,7 @@ def to_coach_scenario(scenario: ScenarioOut | CoachScenario) -> CoachScenario:
         task_goal=scenario.definition.task.goal,
         success_criteria=scenario.definition.task.success_criteria,
         evaluation_focus=scenario.definition.evaluation_focus,
+        personas=scenario.definition.personas,
     )
 
 

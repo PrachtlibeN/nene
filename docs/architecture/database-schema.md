@@ -133,6 +133,8 @@ Indexes: `idx_sessions_status_created (status, created_at DESC)`, `idx_sessions_
 | session_id | TEXT | NOT NULL, FK → sessions(id) ON DELETE CASCADE | |
 | idx | INTEGER | NOT NULL | 0-based position in the transcript |
 | speaker | TEXT | NOT NULL, CHECK IN (`interviewer`,`candidate`) | |
+| speaker_id | TEXT | NULL | Panel persona ID for generated interviewer turns; null for legacy turns and candidates |
+| speaker_name | TEXT | NULL | Panel persona name for generated interviewer turns; null for legacy turns and candidates |
 | text | TEXT | NOT NULL | |
 | source | TEXT | NOT NULL, CHECK IN (`typed`,`speech`,`generated`) | `generated` for interviewer |
 | speech_meta_json | TEXT | NULL | candidate speech only: `duration_ms`, `avg_confidence`, `word_count`, `language` |
@@ -220,8 +222,8 @@ Constraints: `UNIQUE (evaluation_id, criterion)`. Rubric weights (v1.0): relevan
 | Event | Effect |
 |---|---|
 | `POST /sessions` | insert `sessions(status=created)`; insert roleplay `conversations` row with built system prompt |
-| `…/start` | status → `active`; insert interviewer `turns` (idx 0, source=generated) + assistant `messages` seq 0 |
-| `…/turns` | in one DB transaction: insert candidate turn + user message, then (after LLM) interviewer turn + assistant message; `turn_count += 1`. If LLM fails → transaction rolled back, nothing persisted |
+| `…/start` | status → `active`; insert one or two interviewer turns (source=generated) with matching assistant messages |
+| `…/turns` | in one DB transaction: insert candidate turn + user message, then (after LLM) one or two interviewer turns + assistant messages; `turn_count += 1`. If LLM fails → transaction rolled back, nothing persisted |
 | `…/end` | status → `ended`, `ended_at`, `end_reason` |
 | `POST …/evaluation` | requires session `ended` and ≥ 1 candidate turn; insert `evaluations(attempt=n+1, status=pending, rubric_version)`; background task writes `metrics_json`, creates the coach `conversations` row, calls the Coach, validates, inserts six `evaluation_scores` rows with weights, computes and stores `overall_score`, then sets `completed` |
 | Delete session (future) | cascades to everything |
@@ -241,7 +243,8 @@ Invariants (tested):
 
 ## 5. Migration Plan
 
-- `0001_initial.py` – all tables above (single migration for MVP).
+- `0001_initial.py` – initial tables.
+- `0002_panel_speaker_metadata.py` – nullable `turns.speaker_id` and `turns.speaker_name` columns; existing transcript rows remain valid.
 - Later phases add migrations only; never edit applied migrations.
 - Dev reset: delete `echorole.db`, run `alembic upgrade head`, seed runs on app start.
 - File location: `./data/echorole.db` (git-ignored).

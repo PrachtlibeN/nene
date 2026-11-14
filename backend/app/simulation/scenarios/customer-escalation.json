@@ -13,6 +13,24 @@
       "style": "Frustrated and exacting; challenges vague timelines and repeated assurances.",
       "pressure_level": 3
     },
+    "personas": [
+      {
+        "id": "morgan",
+        "name": "Morgan",
+        "role_title": "Customer Operations Director",
+        "focus_area": "Impact and credible commitments",
+        "voice_gender": "male",
+        "persona_prompt": "Represent a frustrated customer operations leader. Focus on business impact, incident scope, ownership, timelines, and verifiable commitments."
+      },
+      {
+        "id": "priya",
+        "name": "Priya",
+        "role_title": "Customer Success Partner",
+        "focus_area": "Empathy and recovery",
+        "voice_gender": "female",
+        "persona_prompt": "Represent a supportive but candid customer success partner. Focus on empathy, listening, stakeholder communication, and practical recovery steps."
+      }
+    ],
     "task": {
       "goal": "Restore confidence by responding to a service issue with empathy and a credible action plan.",
       "success_criteria": [

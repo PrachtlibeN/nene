@@ -53,7 +53,8 @@ def build_coach_user_prompt(
     transcript: list[TurnOut],
 ) -> str:
     turns = "\n".join(
-        f"{turn.id} [{turn.speaker}]: {turn.text}" for turn in transcript
+        f"{turn.id} [{_turn_speaker(scenario, turn)}]: {turn.text}"
+        for turn in transcript
     )
     success_criteria = "\n".join(f"- {item}" for item in scenario.success_criteria)
     focus = ", ".join(item.value for item in scenario.evaluation_focus)
@@ -64,3 +65,20 @@ def build_coach_user_prompt(
         f"Evaluation focus: {focus}\n\n"
         f"Transcript:\n{turns}"
     )
+
+
+def _turn_speaker(scenario: CoachScenario, turn: TurnOut) -> str:
+    if turn.speaker == "candidate":
+        return "Candidate"
+    persona = next(
+        (
+            item
+            for item in scenario.personas
+            if item.id == turn.speaker_id
+            or (turn.speaker_name is not None and item.name == turn.speaker_name)
+        ),
+        None,
+    )
+    if persona is not None:
+        return f"{persona.name} - {persona.role_title}"
+    return turn.speaker_name or "Interviewer"

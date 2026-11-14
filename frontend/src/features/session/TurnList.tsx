@@ -1,16 +1,18 @@
 import React, { useEffect, useRef } from "react";
-import type { TurnOut } from "../../api/client";
+import type { ScenarioOut, TurnOut } from "../../api/client";
 
 interface TurnListProps {
   turns: TurnOut[];
   interviewerName: string;
-  onReplayTurn: (text: string) => void;
+  personas: ScenarioOut["definition"]["personas"];
+  onReplayTurn: (text: string, speakerId?: string) => void;
   isSpeaking: boolean;
 }
 
 export const TurnList: React.FC<TurnListProps> = ({
   turns,
   interviewerName,
+  personas,
   onReplayTurn,
   isSpeaking,
 }) => {
@@ -26,6 +28,20 @@ export const TurnList: React.FC<TurnListProps> = ({
     <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[460px] min-h-[280px] bg-slate-50/50 rounded-lg border border-slate-200">
       {turns.map((turn) => {
         const isInterviewer = turn.speaker === "interviewer";
+        const panelPersonas = personas ?? [];
+        const personaIndex = panelPersonas.findIndex(
+          (persona) => persona.id === turn.speaker_id,
+        );
+        const persona = panelPersonas[personaIndex];
+        const speakerName = persona
+          ? `${persona.name} - ${persona.role_title}`
+          : turn.speaker_name ?? interviewerName;
+        const interviewerBadge =
+          personaIndex === 0
+            ? "bg-amber-100 text-amber-800"
+            : personaIndex === 1
+              ? "bg-sky-100 text-sky-800"
+              : "bg-slate-100 text-slate-700";
         return (
           <div
             key={`${turn.id}-${turn.idx}-${turn.speaker}`}
@@ -35,8 +51,15 @@ export const TurnList: React.FC<TurnListProps> = ({
           >
             <div className="flex items-center gap-2 mb-1 px-1">
               <span className="text-xs font-semibold text-slate-600">
-                {isInterviewer ? interviewerName : "You (Candidate)"}
+                {isInterviewer ? speakerName : "You (Candidate)"}
               </span>
+              {isInterviewer && persona && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${interviewerBadge}`}
+                >
+                  AI #{personaIndex + 1}
+                </span>
+              )}
               <span className="text-[10px] text-slate-400">
                 Turn {turn.idx}
               </span>
@@ -86,7 +109,7 @@ export const TurnList: React.FC<TurnListProps> = ({
                 <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => onReplayTurn(turn.text)}
+                    onClick={() => onReplayTurn(turn.text, turn.speaker_id ?? undefined)}
                     aria-label="Replay speech"
                     className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium focus:outline-none"
                   >

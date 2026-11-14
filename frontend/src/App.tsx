@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ScenarioOut, SessionOut, StartSessionOut } from "./api/client";
+import type { ScenarioOut, SessionOut, StartSessionOut, TurnOut } from "./api/client";
 import { ScenariosView } from "./features/scenarios/ScenariosView";
 import { SessionView } from "./features/session/SessionView";
 import { FeedbackView } from "./features/feedback/FeedbackView";
@@ -10,7 +10,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("scenarios");
   const [currentScenario, setCurrentScenario] = useState<ScenarioOut | null>(null);
   const [currentSession, setCurrentSession] = useState<SessionOut | null>(null);
-  const [initialTurn, setInitialTurn] = useState<StartSessionOut["interviewer_turn"] | null>(null);
+  const [initialTurns, setInitialTurns] = useState<TurnOut[]>([]);
   const [evaluationSessionId, setEvaluationSessionId] = useState<string | null>(null);
 
   const handleSessionStarted = (
@@ -18,9 +18,13 @@ export default function App() {
     startData: StartSessionOut,
     scenario: ScenarioOut,
   ) => {
-    setCurrentSession(session);
+    setCurrentSession(startData.session ?? session);
     setCurrentScenario(scenario);
-    setInitialTurn(startData.interviewer_turn);
+    setInitialTurns(
+      startData.interviewer_turns?.length
+        ? startData.interviewer_turns
+        : [startData.interviewer_turn],
+    );
     setEvaluationSessionId(session.id);
     setActiveTab("session");
   };
@@ -110,7 +114,7 @@ export default function App() {
           <SessionView
             initialSession={currentSession}
             scenario={currentScenario}
-            initialTurn={initialTurn}
+            initialTurns={initialTurns}
             onViewFeedback={handleViewFeedback}
           />
         )}

@@ -30,12 +30,16 @@ class RoleplayReply:
     text: str
     should_end: bool
     llm: LLMMeta
+    speaker_id: str | None = None
+    speaker_name: str | None = None
 
 
 class RoleplayAgent(Protocol):
-    def open_session(self, ctx: RoleplayContext) -> RoleplayReply: ...
+    def open_session(self, ctx: RoleplayContext) -> RoleplayReply | list[RoleplayReply]: ...
 
-    def respond(self, ctx: RoleplayContext, candidate_text: str) -> RoleplayReply: ...
+    def respond(
+        self, ctx: RoleplayContext, candidate_text: str
+    ) -> RoleplayReply | list[RoleplayReply]: ...
 
 
 class StubRoleplayAgent:

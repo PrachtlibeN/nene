@@ -24,6 +24,9 @@ describe("ScenariosView", () => {
         screen.getByRole("heading", { name: "Behavioral Job Interview" }),
       ).toBeInTheDocument();
     });
+    expect(screen.getByText("2-on-1 Panel")).toBeInTheDocument();
+    expect(screen.getByText("AI #1: Alex")).toBeInTheDocument();
+    expect(screen.getByText("AI #2: Sarah")).toBeInTheDocument();
   });
 
   it("views scenario detail and starts practice session", async () => {
@@ -39,9 +42,11 @@ describe("ScenariosView", () => {
 
     // Verify detail is shown
     await waitFor(() => {
-      expect(screen.getByText(/interviewer persona/i)).toBeInTheDocument();
-      expect(screen.getByText("Dana Whitfield")).toBeInTheDocument();
-      expect(screen.getByText("Senior Engineering Manager")).toBeInTheDocument();
+      expect(screen.getByText("2-on-1 Panel")).toBeInTheDocument();
+      expect(screen.getByText("Alex")).toBeInTheDocument();
+      expect(screen.getByText("Sarah")).toBeInTheDocument();
+      expect(screen.getByText("Engineering Manager")).toBeInTheDocument();
+      expect(screen.getByText("People Partner")).toBeInTheDocument();
     });
 
     // Click "Start Practice Session"

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   type ScenarioOut,
@@ -7,16 +7,22 @@ import {
   type TurnOut,
 } from "../../api/client";
 import { ErrorAlert } from "../../components/ErrorAlert";
-import { createSpeechSynthesisController } from "../../utils/speech";
+import {
+  createSpeechSynthesisController,
+  type SpeechSequenceItem,
+} from "../../utils/speech";
 import { PushToTalkButton } from "./PushToTalkButton";
 import { TranscriptReview } from "./TranscriptReview";
 import { TurnList } from "./TurnList";
 import { TypedInputFallback } from "./TypedInputFallback";
 import type { InteractionMode, PushToTalkState } from "./types";
 
+const EMPTY_TURNS: TurnOut[] = [];
+
 interface SessionViewProps {
   initialSession: SessionOut;
   scenario: ScenarioOut;
+  initialTurns?: TurnOut[];
   initialTurn?: TurnOut | null;
   onViewFeedback: (sessionId: string) => void;
   onEndSessionComplete?: (session: SessionOut) => void;
@@ -27,16 +33,25 @@ interface SessionViewProps {
 export const SessionView: React.FC<SessionViewProps> = ({
   initialSession,
   scenario,
+  initialTurns,
   initialTurn,
   onViewFeedback,
   onEndSessionComplete,
   onMockRecordAudio,
 }) => {
   const [session, setSession] = useState<SessionOut>(initialSession);
-  const [turns, setTurns] = useState<TurnOut[]>(
-    initialTurn ? [initialTurn] : [],
+  const openingTurns = useMemo(
+    () => initialTurns ?? (initialTurn ? [initialTurn] : EMPTY_TURNS),
+    [initialTurns, initialTurn],
   );
-  const [state, setState] = useState<PushToTalkState>("idle");
+  const [turns, setTurns] = useState<TurnOut[]>(
+    openingTurns,
+  );
+  const [state, setState] = useState<PushToTalkState>(
+    openingTurns.some((turn) => turn.speaker === "interviewer")
+      ? "speaking"
+      : "idle",
+  );
   const [mode, setMode] = useState<InteractionMode>("hold");
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const [maxAudioSeconds, setMaxAudioSeconds] = useState<number>(120);
@@ -73,17 +88,22 @@ export const SessionView: React.FC<SessionViewProps> = ({
     };
   }, []);
 
-  // Speak initial turn when starting session if available
+  // Speak opening panel turns in order when starting a session.
   useEffect(() => {
-    if (initialTurn && initialTurn.speaker === "interviewer") {
+    const openingInterviewerTurns = openingTurns.filter(
+      (turn) => turn.speaker === "interviewer",
+    );
+    if (openingInterviewerTurns.length > 0) {
       setState("speaking");
-      speechRef.current.speak(
-        initialTurn.text,
+      speechRef.current.speakSequence(
+        openingInterviewerTurns.map((turn) =>
+          speechItemForTurn(turn, scenario),
+        ),
         () => setState("idle"),
         () => setState("idle"),
       );
     }
-  }, [initialTurn]);
+  }, [openingTurns, scenario]);
 
   // Push-to-talk: Start recording
   const handleStartRecording = async () => {
@@ -231,12 +251,12 @@ export const SessionView: React.FC<SessionViewProps> = ({
         speech_meta: source === "speech" ? speechMeta : null,
       });
 
-      // Update turn list
-      setTurns((prev) => [
-        ...prev,
-        response.candidate_turn,
-        response.interviewer_turn,
-      ]);
+      const interviewerTurns =
+        response.interviewer_turns && response.interviewer_turns.length > 0
+          ? response.interviewer_turns
+          : [response.interviewer_turn];
+
+      setTurns((prev) => [...prev, response.candidate_turn, ...interviewerTurns]);
 
       // Update session
       setSession(response.session);
@@ -246,10 +266,10 @@ export const SessionView: React.FC<SessionViewProps> = ({
       setReviewSpeechMeta(null);
 
       // Play interviewer's reply with SpeechSynthesis
-      if (response.interviewer_turn.text) {
+      if (interviewerTurns.some((turn) => turn.text)) {
         setState("speaking");
-        speechRef.current.speak(
-          response.interviewer_turn.text,
+        speechRef.current.speakSequence(
+          interviewerTurns.map((turn) => speechItemForTurn(turn, scenario)),
           () => setState("idle"),
           () => setState("idle"),
         );
@@ -286,10 +306,13 @@ export const SessionView: React.FC<SessionViewProps> = ({
   };
 
   // Replay turn voice
-  const handleReplayTurn = (text: string) => {
+  const handleReplayTurn = (text: string, speakerId?: string) => {
     setState("speaking");
-    speechRef.current.speak(
-      text,
+    const persona = (scenario.definition.personas ?? []).find(
+      (panelPersona) => panelPersona.id === speakerId,
+    );
+    speechRef.current.speakSequence(
+      [{ text, voiceGender: persona?.voice_gender }],
       () => setState("idle"),
       () => setState("idle"),
     );
@@ -311,6 +334,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
   const isSessionEnded = session.status === "ended" || session.status === "abandoned";
   const interviewerName = scenario.definition.persona.name;
+  const personas = scenario.definition.personas ?? [];
 
   return (
     <div className="flex flex-col space-y-4">
@@ -331,7 +355,26 @@ export const SessionView: React.FC<SessionViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Interviewer: <span className="font-semibold text-slate-700">{interviewerName}</span> ({scenario.definition.persona.role})
+            {personas.length === 2 ? (
+              <>
+                Panel:{" "}
+                {personas.map((persona, index) => (
+                  <React.Fragment key={persona.id}>
+                    {index > 0 ? " and " : ""}
+                    <span className="font-semibold text-slate-700">
+                      {persona.name}
+                    </span>{" "}
+                    ({persona.role_title})
+                  </React.Fragment>
+                ))}
+              </>
+            ) : (
+              <>
+                Interviewer:{" "}
+                <span className="font-semibold text-slate-700">{interviewerName}</span>{" "}
+                ({scenario.definition.persona.role})
+              </>
+            )}
           </p>
         </div>
 
@@ -392,6 +435,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       <TurnList
         turns={turns}
         interviewerName={interviewerName}
+        personas={scenario.definition.personas}
         onReplayTurn={handleReplayTurn}
         isSpeaking={state === "speaking"}
       />
@@ -470,3 +514,10 @@ export const SessionView: React.FC<SessionViewProps> = ({
     </div>
   );
 };
+
+function speechItemForTurn(turn: TurnOut, scenario: ScenarioOut): SpeechSequenceItem {
+  const persona = (scenario.definition.personas ?? []).find(
+    (panelPersona) => panelPersona.id === turn.speaker_id,
+  );
+  return { text: turn.text, voiceGender: persona?.voice_gender };
+}

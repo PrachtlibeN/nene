@@ -8,7 +8,7 @@ type Schemas = components["schemas"];
 export const healthExample: Schemas["HealthOut"] = {
   status: "degraded",
   version: "0.1.0",
-  contract_version: "0.3.0",
+  contract_version: "0.4.0",
   components: {
     database: { status: "ok", detail: null },
     llm: {
@@ -29,6 +29,24 @@ export const scenarioExample: Schemas["ScenarioOut"] = {
   difficulty: 2,
   max_turns: 8,
   estimated_minutes: 10,
+  personas: [
+    {
+      id: "engineering-manager",
+      name: "Alex",
+      role_title: "Engineering Manager",
+      focus_area: "Technical & Execution",
+      voice_gender: "male",
+      persona_prompt: "Probe technical decisions, ownership, and measurable execution.",
+    },
+    {
+      id: "people-partner",
+      name: "Sarah",
+      role_title: "People Partner",
+      focus_area: "Leadership & Conflict",
+      voice_gender: "female",
+      persona_prompt: "Explore collaboration, leadership, and conflict resolution.",
+    },
+  ],
   definition: {
     persona: {
       name: "Dana Whitfield",
@@ -36,6 +54,24 @@ export const scenarioExample: Schemas["ScenarioOut"] = {
       style: "Direct, time-pressed, probes vague answers",
       pressure_level: 3,
     },
+    personas: [
+      {
+        id: "engineering-manager",
+        name: "Alex",
+        role_title: "Engineering Manager",
+        focus_area: "Technical & Execution",
+        voice_gender: "male",
+        persona_prompt: "Probe technical decisions, ownership, and measurable execution.",
+      },
+      {
+        id: "people-partner",
+        name: "Sarah",
+        role_title: "People Partner",
+        focus_area: "Leadership & Conflict",
+        voice_gender: "female",
+        persona_prompt: "Explore collaboration, leadership, and conflict resolution.",
+      },
+    ],
     task: {
       goal: "Convince the interviewer you can lead a project under tight deadlines.",
       success_criteria: [
@@ -59,6 +95,7 @@ export const scenarioListExample: Schemas["ScenarioListOut"] = {
       difficulty: scenarioExample.difficulty,
       max_turns: scenarioExample.max_turns,
       estimated_minutes: scenarioExample.estimated_minutes,
+      personas: scenarioExample.personas,
     },
   ],
   total: 1,
@@ -92,10 +129,21 @@ export const turnExample: Schemas["TurnOut"] = {
   session_id: sessionExample.id,
   idx: 0,
   speaker: "interviewer",
-  text: "Tell me about a project you led under a tight deadline.",
+  text: "Welcome. We will discuss how you led a project under pressure.",
   source: "generated",
   speech_meta: null,
+  speaker_id: "engineering-manager",
+  speaker_name: "Alex",
   created_at: "2026-11-13T10:15:04Z",
+};
+
+const secondOpeningTurn: Schemas["TurnOut"] = {
+  ...turnExample,
+  id: "trn_77e0c2",
+  idx: 1,
+  text: "Tell me about a project you led under a tight deadline.",
+  speaker_id: "people-partner",
+  speaker_name: "Sarah",
 };
 
 export const sessionListExample: Schemas["SessionListOut"] = {
@@ -112,26 +160,51 @@ export const startSessionExample: Schemas["StartSessionOut"] = {
     turn_count: 0,
     started_at: "2026-11-13T10:15:04Z",
   },
-  interviewer_turn: turnExample,
+  interviewer_turn: secondOpeningTurn,
+  interviewer_turns: [turnExample, secondOpeningTurn],
 };
 
 export const turnSubmitExample: Schemas["TurnSubmitOut"] = {
   candidate_turn: {
     ...turnExample,
-    id: "trn_77e0c1",
-    idx: 1,
+    id: "trn_77e0c3",
+    idx: 2,
     speaker: "candidate",
     source: "typed",
     text: "In my last role I led a migration.",
+    speaker_id: null,
+    speaker_name: null,
     created_at: "2026-11-13T10:15:40Z",
   },
   interviewer_turn: {
     ...turnExample,
-    id: "trn_8a02d4",
-    idx: 2,
+    id: "trn_8a02d5",
+    idx: 4,
     text: "What was the measurable outcome?",
+    speaker_id: "people-partner",
+    speaker_name: "Sarah",
     created_at: "2026-11-13T10:15:44Z",
   },
+  interviewer_turns: [
+    {
+      ...turnExample,
+      id: "trn_8a02d4",
+      idx: 3,
+      text: "How did you decide what to prioritize?",
+      speaker_id: "engineering-manager",
+      speaker_name: "Alex",
+      created_at: "2026-11-13T10:15:43Z",
+    },
+    {
+      ...turnExample,
+      id: "trn_8a02d5",
+      idx: 4,
+      text: "What was the measurable outcome?",
+      speaker_id: "people-partner",
+      speaker_name: "Sarah",
+      created_at: "2026-11-13T10:15:44Z",
+    },
+  ],
   session: {
     ...sessionExample,
     status: "active",
@@ -142,7 +215,7 @@ export const turnSubmitExample: Schemas["TurnSubmitOut"] = {
 
 export const turnListExample: Schemas["TurnListOut"] = {
   session_id: sessionExample.id,
-  items: [turnExample],
+  items: [turnExample, secondOpeningTurn],
 };
 
 export const speechStatusExample: Schemas["SpeechStatusOut"] = {

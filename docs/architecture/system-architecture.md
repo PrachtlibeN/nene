@@ -40,7 +40,7 @@ No application code or working behavior existed to migrate. Decision D6 is close
 
 ### Goals
 - Real-time, spoken, high-pressure interview roleplay with independent post-session evaluation.
-- Fully local and free to run: Ollama, faster-whisper, SQLite, browser TTS.
+- Supports fully local inference with Ollama or a configured OpenAI-compatible provider; faster-whisper, SQLite, and browser TTS remain local.
 - Parallel development by several developers with zero contract ambiguity.
 
 ### Non‑Goals (MVP)
@@ -51,7 +51,7 @@ Authentication/multi-user accounts, cloud deployment, paid APIs, server-side TTS
 2. **Hard agent isolation.** Roleplay Agent and Evaluation Coach never share a system prompt, conversation ID, or message history (enforced in code *and* in the DB schema).
 3. **One-way module dependencies.** Modules talk only through documented Python interfaces (internal) or REST (frontend ↔ backend).
 4. **Simple first.** Monolithic FastAPI app, modular internals, synchronous SQLite, no message broker, no microservices.
-5. **Stateless LLM calls.** Ollama is called via `/api/chat` with history supplied by us from the DB; Ollama holds no state.
+5. **Stateless LLM calls.** The selected provider receives explicit history supplied from our DB and holds no application session state.
 6. **Models are configuration, not code.** Model names live only in environment variables. Agents request an LLM *profile* (`roleplay` / `evaluation`); only the LLM Gateway maps a profile to a model.
 7. **The backend owns every number.** The LLM judges (criterion scores + evidence); deterministic code computes metrics and the final weighted score.
 
@@ -140,6 +140,7 @@ flowchart LR
   end
 
   OLL[[Ollama]]
+  OAI[[OpenAI-compatible API]]
   FW[[faster-whisper]]
 
   UI -- REST --> SIM
@@ -156,6 +157,7 @@ flowchart LR
   RPA --> LLM
   COA --> LLM
   LLM --> OLL
+  LLM --> OAI
 ```
 
 ### Typical flow (one spoken turn)
@@ -171,13 +173,13 @@ sequenceDiagram
   S-->>U: {text, duration_ms, confidence}
   U->>M: POST /sessions/{id}/turns {text, source:"speech", speech_meta}
   M->>M: persist candidate turn
-  M->>R: respond(session_ctx, history)
+  M->>R: respond(session_ctx, labeled history)
   R->>L: chat(profile=roleplay, messages=[ROLEPLAY system + roleplay history])
-  L-->>R: reply text
-  R-->>M: reply text
-  M->>M: persist interviewer turn + roleplay messages
-  M-->>U: {candidate_turn, interviewer_turn, session}
-  U->>U: speak interviewer_turn.text via SpeechSynthesis
+  L-->>R: reply text(s)
+  R-->>M: one or two panel replies
+  M->>M: persist speaker-labeled interviewer turns + roleplay messages
+  M-->>U: {candidate_turn, interviewer_turns, interviewer_turn, session}
+  U->>U: queue panel turns with distinct browser voices
 ```
 
 ### Evaluation flow
@@ -212,7 +214,7 @@ sequenceDiagram
 - **Exposes:** `get_db()`, `AppError`, `new_id(prefix)`, all schema classes.
 
 ### M2 – LLM Gateway (`llm/`)
-- **Owns:** the only code that talks to Ollama **and the only code that knows model names**. Resolves a *profile* (`roleplay` | `evaluation`) to a model plus generation parameters from configuration (§7.3, §7.8); timeouts; one retry on connection errors; JSON mode; context-size guard; a health check that verifies each configured model is installed.
+- **Owns:** the only code that talks to Ollama or the configured OpenAI-compatible endpoint **and the only code that knows model names**. Selects the provider and resolves a *profile* (`roleplay` | `evaluation`) to a model plus generation parameters from configuration (§7.3, §7.8); handles timeouts, retryable failures, JSON mode, context-size guard, and provider health checks.
 - **Must not:** know about roleplay, evaluation, sessions or prompt content.
 - **Switching models is a configuration change only.** Agents pass a profile, never a model name, so changing models requires no edits to the Roleplay Agent or Evaluation Coach.
 - **Interface:**
@@ -243,7 +245,7 @@ class LLMResult(BaseModel):
 - **Errors raised:** `LLM_UNAVAILABLE`, `LLM_TIMEOUT`, `LLM_MODEL_NOT_FOUND`, `LLM_BAD_OUTPUT`.
 
 ### M3 – Roleplay Agent (`roleplay/`)
-- **Owns:** the interviewer persona. Builds the ROLEPLAY system prompt from a `Scenario`; turns a conversation history into the next interviewer utterance; trims history to the context budget; enforces in-character, short, spoken-style replies.
+- **Owns:** one legacy interviewer or a two-person panel. Builds a persona-specific ROLEPLAY system prompt from a `Scenario`; schedules opening, paired, and alternating replies; labels conversation history; trims history to the context budget; enforces in-character, short, spoken-style replies.
 - **Must not:** persist anything, read the DB, give feedback/coaching, see evaluation data, or share state with the Coach.
 - **Interface:**
 
@@ -258,13 +260,15 @@ class RoleplayContext(BaseModel):
 
 class RoleplayAgent:
     def __init__(self, llm: LLMClient): ...
-    def open_session(self, ctx: RoleplayContext) -> RoleplayReply: ...   # first question
-    def respond(self, ctx: RoleplayContext, candidate_text: str) -> RoleplayReply: ...
+    def open_session(self, ctx: RoleplayContext) -> RoleplayReply | list[RoleplayReply]: ...
+    def respond(self, ctx: RoleplayContext, candidate_text: str) -> RoleplayReply | list[RoleplayReply]: ...
 
 class RoleplayReply(BaseModel):
     text: str
     should_end: bool              # persona signals the interview is naturally over
     llm: LLMMeta                  # model, latency, tokens (for logging only)
+    speaker_id: str | None
+    speaker_name: str | None
 ```
 
 ### M4 – Simulation Engine (`simulation/`)
@@ -320,7 +324,7 @@ def compute_overall_score(criteria: list[CriterionScoreIn]) -> int: ...   # rubr
 ```
 
 ### M7 – Frontend (`frontend/`)
-- **Owns:** scenario picker; session screen with the **push-to-talk** flow (§7.12), transcript view, typed-input fallback, interviewer TTS via `SpeechSynthesis`; end-session and feedback screens (qualitative feedback panel and delivery-metrics panel shown separately); typed API client; MSW mocks.
+- **Owns:** scenario picker with panel identities; session screen with the **push-to-talk** flow (§7.12), transcript view, typed-input fallback, queued two-voice interviewer TTS via `SpeechSynthesis`; end-session and feedback screens (qualitative feedback panel and delivery-metrics panel shown separately); typed API client; MSW mocks.
 - **Must not:** call Ollama or Whisper directly; invent request fields; compute scores. Types are generated from the backend OpenAPI schema (`openapi-typescript`).
 
 ---
@@ -378,6 +382,10 @@ Validated at startup by `core/config.py` (pydantic-settings); invalid or missing
 | `ECHOROLE_DB_URL` | no | `sqlite:///./data/echorole.db` | Database |
 | `CORS_ORIGINS` | no | `http://localhost:5173` | Allowed origins |
 | `OLLAMA_BASE_URL` | no | `http://localhost:11434` | Ollama endpoint |
+| `LLM_PROVIDER` | no | `ollama` | Select `ollama` or `openai_compatible` |
+| `OPENAI_BASE_URL` | for cloud provider | *(empty)* | OpenAI-compatible chat-completions base URL |
+| `OPENAI_API_KEY` | for cloud provider | *(empty)* | Provider key; must not be logged or persisted |
+| `OPENAI_MODEL` | for cloud provider | *(empty)* | Configured cloud model name |
 | `OLLAMA_MODEL` | **yes** | *(none – no code default)* | Model used by all profiles unless overridden |
 | `OLLAMA_MODEL_ROLEPLAY` | no | falls back to `OLLAMA_MODEL` | Override for the `roleplay` profile |
 | `OLLAMA_MODEL_EVALUATION` | no | falls back to `OLLAMA_MODEL` | Override for the `evaluation` profile |

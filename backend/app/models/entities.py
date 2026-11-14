@@ -93,6 +93,8 @@ class Turn(Base):
     )
     idx: Mapped[int] = mapped_column(Integer, nullable=False)
     speaker: Mapped[str] = mapped_column(String, nullable=False)
+    speaker_id: Mapped[str | None] = mapped_column(String)
+    speaker_name: Mapped[str | None] = mapped_column(String)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str] = mapped_column(String, nullable=False)
     speech_meta_json: Mapped[str | None] = mapped_column(Text)

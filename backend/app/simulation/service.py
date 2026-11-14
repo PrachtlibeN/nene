@@ -239,17 +239,20 @@ class SimulationService:
             conversation_id = conversation.id
             session_snapshot_id = session.id
 
-        reply = self.agent.open_session(
-            RoleplayContext(
-                session_id=session_snapshot_id,
-                conversation_id=conversation_id,
-                scenario=scenario_out,
-                history=[],
-                turn_index=0,
-                max_turns=scenario_out.max_turns,
+        replies = _replies(
+            self.agent.open_session(
+                RoleplayContext(
+                    session_id=session_snapshot_id,
+                    conversation_id=conversation_id,
+                    scenario=scenario_out,
+                    history=[],
+                    turn_index=0,
+                    max_turns=scenario_out.max_turns,
+                )
             )
         )
-        _validate_reply(reply)
+        for reply in replies:
+            _validate_reply(reply)
         now = _timestamp(self.clock())
         with self._transaction() as db:
             starting_session = self.repository.get_session(db, session_id)
@@ -263,33 +266,45 @@ class SimulationService:
             starting_session.status = SessionStatus.ACTIVE.value
             starting_session.started_at = activity_at
             starting_session.last_activity_at = activity_at
-            turn = Turn(
-                id=new_id("trn_"),
-                session_id=starting_session.id,
-                idx=0,
-                speaker="interviewer",
-                text=reply.text,
-                source=TurnSource.GENERATED.value,
-                speech_meta_json=None,
-                llm_meta_json=_reply_metadata(reply, self.settings.model_for(LLMProfile.ROLEPLAY)),
-                created_at=now,
-            )
-            db.add(turn)
-            db.add(
-                Message(
-                    id=new_id("msg_"),
-                    conversation_id=conversation_id,
-                    seq=0,
-                    role="assistant",
-                    content=reply.text,
-                    turn_id=turn.id,
+            turns = [
+                Turn(
+                    id=new_id("trn_"),
+                    session_id=starting_session.id,
+                    idx=index,
+                    speaker="interviewer",
+                    speaker_id=reply.speaker_id,
+                    speaker_name=reply.speaker_name,
+                    text=reply.text,
+                    source=TurnSource.GENERATED.value,
+                    speech_meta_json=None,
+                    llm_meta_json=_reply_metadata(
+                        reply, self.settings.model_for(LLMProfile.ROLEPLAY)
+                    ),
                     created_at=now,
                 )
+                for index, reply in enumerate(replies)
+            ]
+            db.add_all(turns)
+            db.add_all(
+                [
+                    Message(
+                        id=new_id("msg_"),
+                        conversation_id=conversation_id,
+                        seq=index,
+                        role="assistant",
+                        content=_labeled_reply_content(reply, scenario_out),
+                        turn_id=turn.id,
+                        created_at=now,
+                    )
+                    for index, (reply, turn) in enumerate(zip(replies, turns, strict=True))
+                ]
             )
             db.flush()
+            turn_outputs = [_turn_out(turn) for turn in turns]
             output = StartSessionOut(
                 session=self._session_out(db, starting_session),
-                interviewer_turn=_turn_out(turn),
+                interviewer_turn=turn_outputs[-1],
+                interviewer_turns=turn_outputs,
             )
         return output
 
@@ -350,13 +365,15 @@ class SimulationService:
             conversation_id = conversation.id
 
         try:
-            reply = self.agent.respond(context, payload.text)
-            _validate_reply(reply)
+            replies = _replies(self.agent.respond(context, payload.text))
+            for reply in replies:
+                _validate_reply(reply)
             persisted = self._persist_turn(
                 session_id,
                 conversation_id,
                 payload,
-                reply,
+                replies,
+                scenario,
                 old_turn_count,
                 accepted_at,
             )
@@ -419,7 +436,8 @@ class SimulationService:
         session_id: str,
         conversation_id: str,
         payload: TurnCreateIn,
-        reply: RoleplayReply,
+        replies: list[RoleplayReply],
+        scenario: ScenarioOut,
         old_turn_count: int,
         accepted_at: str,
     ) -> TurnSubmitOut:
@@ -449,42 +467,52 @@ class SimulationService:
                 llm_meta_json=None,
                 created_at=accepted_at,
             )
-            interviewer_turn = Turn(
-                id=new_id("trn_"),
-                session_id=session_id,
-                idx=existing_turn_count + 1,
-                speaker="interviewer",
-                text=reply.text,
-                source=TurnSource.GENERATED.value,
-                speech_meta_json=None,
-                llm_meta_json=_reply_metadata(reply, self.settings.model_for(LLMProfile.ROLEPLAY)),
-                created_at=now,
-            )
-            db.add_all([candidate_turn, interviewer_turn])
+            interviewer_turns = [
+                Turn(
+                    id=new_id("trn_"),
+                    session_id=session_id,
+                    idx=existing_turn_count + index + 1,
+                    speaker="interviewer",
+                    speaker_id=reply.speaker_id,
+                    speaker_name=reply.speaker_name,
+                    text=reply.text,
+                    source=TurnSource.GENERATED.value,
+                    speech_meta_json=None,
+                    llm_meta_json=_reply_metadata(
+                        reply, self.settings.model_for(LLMProfile.ROLEPLAY)
+                    ),
+                    created_at=now,
+                )
+                for index, reply in enumerate(replies)
+            ]
+            db.add_all([candidate_turn, *interviewer_turns])
 
             next_seq = self.repository.count_messages(db, conversation_id)
-            db.add_all(
-                [
+            messages = [
+                Message(
+                    id=new_id("msg_"),
+                    conversation_id=conversation_id,
+                    seq=next_seq,
+                    role="user",
+                    content=payload.text,
+                    turn_id=candidate_turn.id,
+                    created_at=accepted_at,
+                )
+            ] + [
                     Message(
                         id=new_id("msg_"),
                         conversation_id=conversation_id,
-                        seq=next_seq,
-                        role="user",
-                        content=payload.text,
-                        turn_id=candidate_turn.id,
-                        created_at=accepted_at,
-                    ),
-                    Message(
-                        id=new_id("msg_"),
-                        conversation_id=conversation_id,
-                        seq=next_seq + 1,
+                        seq=next_seq + index + 1,
                         role="assistant",
-                        content=reply.text,
+                        content=_labeled_reply_content(reply, scenario),
                         turn_id=interviewer_turn.id,
                         created_at=now,
-                    ),
+                    )
+                    for index, (reply, interviewer_turn) in enumerate(
+                        zip(replies, interviewer_turns, strict=True)
+                    )
                 ]
-            )
+            db.add_all(messages)
             session.turn_count = old_turn_count + 1
             session.in_flight = 0
             session.last_activity_at = accepted_at
@@ -492,15 +520,17 @@ class SimulationService:
                 session.status = SessionStatus.ENDED.value
                 session.end_reason = EndReason.MAX_TURNS.value
                 session.ended_at = now
-            elif reply.should_end:
+            elif any(reply.should_end for reply in replies):
                 session.status = SessionStatus.ENDED.value
                 session.end_reason = EndReason.AGENT_CONCLUDED.value
                 session.ended_at = now
             db.flush()
+            interviewer_outputs = [_turn_out(turn) for turn in interviewer_turns]
             return TurnSubmitOut(
                 candidate_turn=_turn_out(candidate_turn),
-                interviewer_turn=_turn_out(interviewer_turn),
+                interviewer_turn=interviewer_outputs[-1],
                 session=self._session_out(db, session),
+                interviewer_turns=interviewer_outputs,
             )
 
     def _clear_in_flight(self, session_id: str, previous_activity_at: str) -> None:
@@ -539,6 +569,7 @@ class SimulationService:
         return session
 
     def _scenario_summary(self, scenario: Scenario) -> ScenarioSummary:
+        definition = ScenarioDefinition.model_validate_json(scenario.definition_json)
         return ScenarioSummary(
             id=scenario.id,
             slug=scenario.slug,
@@ -550,6 +581,7 @@ class SimulationService:
             estimated_minutes=self._estimated_minutes.get(
                 scenario.slug, max(1, round(scenario.max_turns * 1.25))
             ),
+            personas=definition.personas,
         )
 
     def _scenario_out(self, scenario: Scenario) -> ScenarioOut:
@@ -621,6 +653,8 @@ def _turn_out(turn: Turn) -> TurnOut:
         text=turn.text,
         source=turn.source,
         speech_meta=speech_meta,
+        speaker_id=turn.speaker_id,
+        speaker_name=turn.speaker_name,
         created_at=_parse_timestamp(turn.created_at),
     )
 
@@ -638,6 +672,31 @@ def _reply_metadata(reply: RoleplayReply, fallback_model: str) -> str:
 
 def _llm_message(role: str, content: str) -> LLMMessage:
     return LLMMessage(role=role, content=content)
+
+
+def _replies(
+    result: RoleplayReply | list[RoleplayReply],
+) -> list[RoleplayReply]:
+    replies = result if isinstance(result, list) else [result]
+    if not replies:
+        raise AppError(
+            ErrorCode.LLM_BAD_OUTPUT,
+            "The roleplay agent returned no interviewer turns.",
+            502,
+        )
+    return replies
+
+
+def _labeled_reply_content(reply: RoleplayReply, scenario: ScenarioOut) -> str:
+    if reply.speaker_id is None or reply.speaker_name is None:
+        return reply.text
+    persona = next(
+        (item for item in scenario.definition.personas if item.id == reply.speaker_id),
+        None,
+    )
+    if persona is None:
+        return f"[{reply.speaker_name}]: {reply.text}"
+    return f"[{reply.speaker_name} - {persona.role_title}]: {reply.text}"
 
 
 def _session_not_found(session_id: str) -> AppError:

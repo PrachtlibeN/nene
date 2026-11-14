@@ -14,7 +14,8 @@ export const ScenarioDetail: React.FC<ScenarioDetailProps> = ({
   onBack,
   isStarting,
 }) => {
-  const { persona, task, evaluation_focus } = scenario.definition;
+  const { persona, personas, task, evaluation_focus } = scenario.definition;
+  const panelPersonas = personas ?? [];
 
   const difficultyLabels: Record<number, { text: string; color: string }> = {
     1: { text: "Level 1: Beginner", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
@@ -63,23 +64,55 @@ export const ScenarioDetail: React.FC<ScenarioDetailProps> = ({
       </div>
 
       <div className="grid gap-6 py-6 md:grid-cols-2">
-        {/* Persona Panel */}
-        <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Interviewer Persona
-            </h3>
-            <span className="rounded bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
-              Pressure Level: {persona.pressure_level}/3
-            </span>
+        {panelPersonas.length === 2 ? (
+          <section className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-4 md:col-span-2">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-indigo-900">
+                2-on-1 Panel
+              </h3>
+              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-indigo-700">
+                Two AI interviewers
+              </span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {panelPersonas.map((panelPersona, index) => (
+                <div
+                  key={panelPersona.id}
+                  className={`rounded-lg border bg-white p-4 ${
+                    index === 0 ? "border-amber-200" : "border-sky-200"
+                  }`}
+                >
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                    AI #{index + 1} &middot; {panelPersona.focus_area}
+                  </div>
+                  <p className="mt-2 text-lg font-bold text-slate-900">
+                    {panelPersona.name}
+                  </p>
+                  <p className="text-sm font-medium text-indigo-600">
+                    {panelPersona.role_title}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Interviewer Persona
+              </h3>
+              <span className="rounded bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
+                Pressure Level: {persona.pressure_level}/3
+              </span>
+            </div>
+            <p className="mt-2 text-lg font-bold text-slate-900">{persona.name}</p>
+            <p className="text-sm font-medium text-indigo-600">{persona.role}</p>
+            <div className="mt-3 text-sm text-slate-700">
+              <span className="font-semibold text-slate-900">Style: </span>
+              {persona.style}
+            </div>
           </div>
-          <p className="mt-2 text-lg font-bold text-slate-900">{persona.name}</p>
-          <p className="text-sm font-medium text-indigo-600">{persona.role}</p>
-          <div className="mt-3 text-sm text-slate-700">
-            <span className="font-semibold text-slate-900">Style: </span>
-            {persona.style}
-          </div>
-        </div>
+        )}
 
         {/* Task & Goal Panel */}
         <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-4">

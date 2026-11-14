@@ -9,14 +9,14 @@ from sqlalchemy.orm import sessionmaker
 from starlette.requests import Request
 
 from app.api.health import router as health_router
-from app.core.config import Settings
+from app.core.config import LLMProvider, Settings
 from app.core.db import build_engine
 from app.core.errors import register_exception_handlers
 from app.core.ids import new_request_id
 from app.core.logging import configure_logging
 from app.evaluation.coach import EvaluationCoach
 from app.evaluation.router import router as evaluation_router
-from app.llm.client import OllamaClient
+from app.llm.client import OllamaClient, OpenAICompatibleClient
 from app.llm.interfaces import LLMClient
 from app.roleplay.agent import RoleplayAgent
 from app.simulation.router import router as simulation_router
@@ -45,7 +45,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         llm_client = getattr(application.state, "llm_client", None)
         owns_llm_client = llm_client is None
         if llm_client is None:
-            llm_client = OllamaClient(app_settings)
+            if app_settings.llm_provider is LLMProvider.OPENAI_COMPATIBLE:
+                llm_client = OpenAICompatibleClient(app_settings)
+            else:
+                llm_client = OllamaClient(app_settings)
             application.state.llm_client = llm_client
 
         owns_roleplay_agent = getattr(application.state, "roleplay_agent", None) is None
@@ -68,7 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if owns_engine:
                 engine.dispose()
             if owns_llm_client:
-                cast(OllamaClient, llm_client).close()
+                cast(OllamaClient | OpenAICompatibleClient, llm_client).close()
             for name, owned in (
                 ("db_engine", owns_engine),
                 ("db_session_factory", owns_session_factory),
