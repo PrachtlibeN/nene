@@ -1,5 +1,5 @@
 /**
- * Safe wrapper for browser SpeechSynthesis API.
+ * Safe wrapper for browser SpeechSynthesis and SpeechRecognition APIs.
  */
 
 export interface SpeechSynthesisController {
@@ -17,6 +17,235 @@ export interface SpeechSynthesisController {
 export interface SpeechSequenceItem {
   text: string;
   voiceGender?: "male" | "female";
+}
+
+export interface BrowserSpeechRecognitionEvent {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+}
+
+export interface BrowserSpeechRecognitionErrorEvent {
+  error: string;
+  message?: string;
+}
+
+export interface BrowserSpeechRecognitionInstance {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  continuous?: boolean;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: BrowserSpeechRecognitionErrorEvent) => void) | null;
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+export interface SpeechRecognitionCallbacks {
+  onStart?: () => void;
+  onEnd?: () => void;
+  onResult?: (transcript: string) => void;
+  /**
+   * Called when speech recognition encounters an error.
+   * isPermanentDenied is true only for 'not-allowed' or 'service-not-allowed'.
+   */
+  onError?: (error: string, isPermanentDenied: boolean) => void;
+}
+
+export interface SpeechRecognitionController {
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  isListening: () => boolean;
+  isStarting: () => boolean;
+  isSupported: () => boolean;
+}
+
+let activeRecognitionInstance: BrowserSpeechRecognitionInstance | null = null;
+
+export function getSpeechRecognitionClass(): (new () => BrowserSpeechRecognitionInstance) | null {
+  if (typeof window === "undefined") return null;
+  const win = window as unknown as {
+    SpeechRecognition?: new () => BrowserSpeechRecognitionInstance;
+    webkitSpeechRecognition?: new () => BrowserSpeechRecognitionInstance;
+  };
+  return win.SpeechRecognition || win.webkitSpeechRecognition || null;
+}
+
+export function isSpeechRecognitionSupported(): boolean {
+  return getSpeechRecognitionClass() !== null;
+}
+
+export function abortActiveSpeechRecognition(): void {
+  if (activeRecognitionInstance) {
+    try {
+      activeRecognitionInstance.abort();
+    } catch {
+      // ignore errors on abort
+    }
+    activeRecognitionInstance = null;
+  }
+}
+
+export function stopAllSpeech(): void {
+  abortActiveSpeechRecognition();
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      // ignore errors on cancel
+    }
+  }
+}
+
+export function createSpeechRecognitionController(
+  callbacks: SpeechRecognitionCallbacks,
+): SpeechRecognitionController {
+  let isStarting = false;
+  let isListening = false;
+  let currentInstance: BrowserSpeechRecognitionInstance | null = null;
+
+  const initInstance = (): BrowserSpeechRecognitionInstance => {
+    if (activeRecognitionInstance) {
+      try {
+        activeRecognitionInstance.abort();
+      } catch {
+        // ignore errors on abort
+      }
+      activeRecognitionInstance = null;
+    }
+
+    const SpeechRecognitionClass = getSpeechRecognitionClass();
+    if (!SpeechRecognitionClass) {
+      throw new Error("SpeechRecognition is not supported");
+    }
+
+    const recognition = new SpeechRecognitionClass();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      isStarting = false;
+      isListening = true;
+      callbacks.onStart?.();
+    };
+
+    recognition.onend = () => {
+      isStarting = false;
+      isListening = false;
+      if (activeRecognitionInstance === recognition) {
+        activeRecognitionInstance = null;
+      }
+      callbacks.onEnd?.();
+    };
+
+    recognition.onerror = (event: BrowserSpeechRecognitionErrorEvent) => {
+      isStarting = false;
+      isListening = false;
+      if (activeRecognitionInstance === recognition) {
+        activeRecognitionInstance = null;
+      }
+      const err = event.error;
+      const isDenied = err === "not-allowed" || err === "service-not-allowed";
+      callbacks.onError?.(err, isDenied);
+    };
+
+    recognition.onresult = (event: BrowserSpeechRecognitionEvent) => {
+      const transcript = event?.results?.[0]?.[0]?.transcript;
+      if (transcript) {
+        callbacks.onResult?.(transcript);
+      }
+    };
+
+    currentInstance = recognition;
+    activeRecognitionInstance = recognition;
+    return recognition;
+  };
+
+  const start = (): void => {
+    if (isStarting || isListening) return;
+
+    if (!isSpeechRecognitionSupported()) {
+      callbacks.onError?.("not-supported", true);
+      return;
+    }
+
+    isStarting = true;
+    try {
+      const recognition = initInstance();
+      recognition.start();
+    } catch (err: unknown) {
+      const isInvalidState =
+        err instanceof Error &&
+        (err.name === "InvalidStateError" ||
+          err.message?.toLowerCase().includes("invalidstate"));
+
+      if (isInvalidState) {
+        try {
+          if (currentInstance) {
+            currentInstance.abort();
+            currentInstance = null;
+          }
+          const retryRecognition = initInstance();
+          retryRecognition.start();
+        } catch {
+          isStarting = false;
+          isListening = false;
+        }
+      } else {
+        isStarting = false;
+        isListening = false;
+        callbacks.onError?.(
+          err instanceof Error ? err.message : "recognition-error",
+          false,
+        );
+      }
+    }
+  };
+
+  const stop = (): void => {
+    isStarting = false;
+    if (currentInstance) {
+      try {
+        currentInstance.stop();
+      } catch {
+        // ignore errors on stop
+      }
+    }
+  };
+
+  const abort = (): void => {
+    isStarting = false;
+    isListening = false;
+    if (currentInstance) {
+      try {
+        currentInstance.abort();
+      } catch {
+        // ignore errors on abort
+      }
+      if (activeRecognitionInstance === currentInstance) {
+        activeRecognitionInstance = null;
+      }
+      currentInstance = null;
+    }
+  };
+
+  return {
+    start,
+    stop,
+    abort,
+    isListening: () => isListening,
+    isStarting: () => isStarting,
+    isSupported: isSpeechRecognitionSupported,
+  };
 }
 
 export function createSpeechSynthesisController(): SpeechSynthesisController {

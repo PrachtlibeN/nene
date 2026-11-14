@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createSpeechSynthesisController } from "./speech";
+import {
+  createSpeechRecognitionController,
+  createSpeechSynthesisController,
+  stopAllSpeech,
+  type BrowserSpeechRecognitionErrorEvent,
+  type BrowserSpeechRecognitionEvent,
+  type BrowserSpeechRecognitionInstance,
+} from "./speech";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -17,8 +24,10 @@ describe("SpeechSynthesisController", () => {
       lang: "en-US",
     } as SpeechSynthesisVoice;
     const utterances: SpeechSynthesisUtterance[] = [];
-    vi.spyOn(window.speechSynthesis, "getVoices")
-      .mockReturnValue([maleVoice, femaleVoice]);
+    vi.spyOn(window.speechSynthesis, "getVoices").mockReturnValue([
+      maleVoice,
+      femaleVoice,
+    ]);
     vi.spyOn(window.speechSynthesis, "speak").mockImplementation((utterance) => {
       utterances.push(utterance);
     });
@@ -44,5 +53,127 @@ describe("SpeechSynthesisController", () => {
 
     utterances[1]?.onend?.(new Event("end") as SpeechSynthesisEvent);
     expect(onEnd).toHaveBeenCalledOnce();
+  });
+});
+
+describe("SpeechRecognitionController & stopAllSpeech", () => {
+  class BaseMockRecognition implements BrowserSpeechRecognitionInstance {
+    lang = "en-US";
+    interimResults = false;
+    maxAlternatives = 1;
+    onstart: (() => void) | null = null;
+    onend: (() => void) | null = null;
+    onerror: ((event: BrowserSpeechRecognitionErrorEvent) => void) | null = null;
+    onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null = null;
+    start = vi.fn();
+    stop = vi.fn();
+    abort = vi.fn();
+  }
+
+  it("stopAllSpeech aborts active recognition and cancels speech synthesis", () => {
+    const cancelSpy = vi.spyOn(window.speechSynthesis, "cancel");
+    let currentInstance: BaseMockRecognition | null = null;
+
+    class TestRecognition extends BaseMockRecognition {
+      constructor() {
+        super();
+        currentInstance = this;
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", TestRecognition);
+
+    const controller = createSpeechRecognitionController({});
+    controller.start();
+
+    expect(currentInstance).not.toBeNull();
+    stopAllSpeech();
+
+    const active = currentInstance as BaseMockRecognition | null;
+    expect(active?.abort).toHaveBeenCalled();
+    expect(cancelSpy).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("guards against overlapping start calls", () => {
+    let currentInstance: BaseMockRecognition | null = null;
+
+    class TestRecognition extends BaseMockRecognition {
+      constructor() {
+        super();
+        currentInstance = this;
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", TestRecognition);
+
+    const controller = createSpeechRecognitionController({});
+    controller.start();
+    controller.start(); // second call while starting
+
+    const active = currentInstance as BaseMockRecognition | null;
+    expect(active?.start).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("retries with a fresh instance on InvalidStateError without reporting error", () => {
+    let callCount = 0;
+    const instances: BaseMockRecognition[] = [];
+
+    class TestRecognition extends BaseMockRecognition {
+      constructor() {
+        super();
+        const inst = this;
+        instances.push(inst);
+        inst.start = vi.fn(() => {
+          callCount += 1;
+          if (callCount === 1) {
+            const err = new Error("recognition has already started");
+            err.name = "InvalidStateError";
+            throw err;
+          }
+        });
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", TestRecognition);
+
+    const onError = vi.fn();
+    const controller = createSpeechRecognitionController({ onError });
+    controller.start();
+
+    expect(instances).toHaveLength(2);
+    expect(instances[0]?.abort).toHaveBeenCalled();
+    expect(instances[1]?.start).toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("distinguishes permanent mic denial from temporary errors", () => {
+    let lastInstance: BaseMockRecognition | null = null;
+
+    class TestRecognition extends BaseMockRecognition {
+      constructor() {
+        super();
+        lastInstance = this;
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", TestRecognition);
+
+    const onError = vi.fn();
+    const controller = createSpeechRecognitionController({ onError });
+
+    // Temporary error like 'no-speech'
+    controller.start();
+    const target1 = lastInstance as BaseMockRecognition | null;
+    target1?.onerror?.({ error: "no-speech" });
+    expect(onError).toHaveBeenLastCalledWith("no-speech", false);
+    expect(controller.isListening()).toBe(false);
+
+    // Permanent denial like 'not-allowed'
+    controller.start();
+    const target2 = lastInstance as BaseMockRecognition | null;
+    target2?.onerror?.({ error: "not-allowed" });
+    expect(onError).toHaveBeenLastCalledWith("not-allowed", true);
+    expect(controller.isListening()).toBe(false);
+
+    vi.unstubAllGlobals();
   });
 });

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
-  ApiError,
   type ScenarioOut,
   type SessionOut,
   type SpeechMeta,
@@ -10,6 +9,7 @@ import {
 import { ErrorAlert } from "../../components/ErrorAlert";
 import {
   createSpeechSynthesisController,
+  stopAllSpeech,
   type SpeechSequenceItem,
 } from "../../utils/speech";
 import { PushToTalkButton } from "./PushToTalkButton";
@@ -78,9 +78,6 @@ export const SessionView: React.FC<SessionViewProps> = ({
         if (status.limits?.max_audio_seconds) {
           setMaxAudioSeconds(status.limits.max_audio_seconds);
         }
-        if (status.stt?.status === "unavailable") {
-          setIsMicDenied(true);
-        }
       })
       .catch(() => {
         // Fallback to default 120s if endpoint fails
@@ -89,7 +86,18 @@ export const SessionView: React.FC<SessionViewProps> = ({
     return () => {
       mounted = false;
       if (timerRef.current) clearInterval(timerRef.current);
+      if (
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state === "recording"
+      ) {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {
+          // ignore error on stop
+        }
+      }
       speech.stop();
+      stopAllSpeech();
     };
   }, []);
 
@@ -233,9 +241,6 @@ export const SessionView: React.FC<SessionViewProps> = ({
       // Transition to review: No auto-send!
       setState("review");
     } catch (err) {
-      if (err instanceof ApiError && (err.code === "STT_UNAVAILABLE" || err.code === "STT_NOT_READY")) {
-        setIsMicDenied(true);
-      }
       setError(err);
       setState("idle");
     }
@@ -285,9 +290,6 @@ export const SessionView: React.FC<SessionViewProps> = ({
         setState("idle");
       }
     } catch (err) {
-      if (err instanceof ApiError && (err.code === "STT_UNAVAILABLE" || err.code === "STT_NOT_READY")) {
-        setIsMicDenied(true);
-      }
       setError(err);
       setState("idle");
     }
@@ -512,6 +514,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
           {/* Typed Fallback Input */}
           <TypedInputFallback
             isMicDenied={isMicDenied}
+            onMicDeniedChange={setIsMicDenied}
             isDisabled={
               state === "transcribing" ||
               state === "waiting_reply" ||

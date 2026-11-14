@@ -222,3 +222,99 @@ def test_health_queries_active_provider_model_endpoint() -> None:
         "evaluation": "cloud-test-model",
     }
     client.close()
+
+
+def test_chat_retries_on_bad_output_and_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    delays: list[float] = []
+    monkeypatch.setattr("app.llm.client.time.sleep", delays.append)
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if len(requests) == 1:
+            # First attempt returns empty content
+            return httpx.Response(
+                200,
+                json={"model": "cloud-test-model", "choices": [{"message": {"content": ""}}]},
+            )
+        return chat_response()
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    llm = OpenAICompatibleClient(make_settings(), client)
+    result = llm.chat(LLMProfile.ROLEPLAY, [LLMMessage(role="user", content="Hi")])
+
+    assert len(requests) == 2
+    assert delays == [0.8]
+    assert result.content == "A useful response."
+    client.close()
+
+
+def test_chat_extracts_reasoning_content_fallback() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "cloud-test-model",
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "reasoning_content": "Final reasoning text used as reply.",
+                        }
+                    }
+                ],
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    llm = OpenAICompatibleClient(make_settings(), client)
+    result = llm.chat(LLMProfile.ROLEPLAY, [LLMMessage(role="user", content="Hi")])
+
+    assert result.content == "Final reasoning text used as reply."
+    client.close()
+
+
+def test_chat_strips_think_tags_when_content_follows() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "cloud-test-model",
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "<think>Planning response...</think>\nHello there!",
+                        }
+                    }
+                ],
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    llm = OpenAICompatibleClient(make_settings(), client)
+    result = llm.chat(LLMProfile.ROLEPLAY, [LLMMessage(role="user", content="Hi")])
+
+    assert result.content == "Hello there!"
+    client.close()
+
+
+def test_chat_falls_back_to_profile_model_when_missing() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"role": "assistant", "content": "Valid response."}}
+                ],
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    llm = OpenAICompatibleClient(make_settings(), client)
+    result = llm.chat(LLMProfile.ROLEPLAY, [LLMMessage(role="user", content="Hi")])
+
+    assert result.model == "cloud-test-model"
+    assert result.content == "Valid response."
+    client.close()

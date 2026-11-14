@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import time
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -17,6 +18,8 @@ from app.llm.interfaces import LLMHealth, LLMMessage, LLMResult
 class OpenAICompatibleClient:
     MAX_RATE_LIMIT_RETRIES = 2
     MAX_RETRY_AFTER_SECONDS = 5.0
+    MAX_CHAT_RETRIES = 3
+    RETRY_DELAYS = (0.8, 1.5)
 
     def __init__(
         self,
@@ -54,40 +57,99 @@ class OpenAICompatibleClient:
             payload["response_format"] = {"type": "json_object"}
 
         started = time.perf_counter()
-        response = self._request(
-            "POST",
-            "/chat/completions",
-            timeout=profile_config.timeout_s,
-            json=payload,
-        )
-        data = self._response_json(response)
-        choices = data.get("choices")
-        choice = choices[0] if isinstance(choices, list) and choices else None
-        message = choice.get("message") if isinstance(choice, dict) else None
-        content = message.get("content") if isinstance(message, dict) else None
-        response_model = data.get("model")
-        usage = data.get("usage")
-        usage = usage if isinstance(usage, dict) else {}
-        if (
-            not isinstance(content, str)
-            or not content.strip()
-            or not isinstance(response_model, str)
-            or not response_model.strip()
-        ):
-            raise AppError(
-                ErrorCode.LLM_BAD_OUTPUT,
-                "OpenAI-compatible provider returned no usable message content or model metadata.",
-                502,
-            )
+        last_error: Exception | None = None
 
-        return LLMResult(
-            content=content,
-            model=response_model,
-            profile=profile,
-            prompt_tokens=self._optional_count(usage.get("prompt_tokens")),
-            completion_tokens=self._optional_count(usage.get("completion_tokens")),
-            latency_ms=int((time.perf_counter() - started) * 1000),
+        for attempt in range(self.MAX_CHAT_RETRIES):
+            try:
+                response = self._request(
+                    "POST",
+                    "/chat/completions",
+                    timeout=profile_config.timeout_s,
+                    json=payload,
+                )
+                data = self._response_json(response)
+                choices = data.get("choices")
+                choice = choices[0] if isinstance(choices, list) and choices else None
+                message = choice.get("message") if isinstance(choice, dict) else None
+                content = message.get("content") if isinstance(message, dict) else None
+
+                # Extract reasoning content if content is missing or empty
+                if (
+                    not isinstance(content, str) or not content.strip()
+                ) and isinstance(message, dict):
+                    reasoning = message.get("reasoning_content") or message.get("reasoning")
+                    if isinstance(reasoning, str) and reasoning.strip():
+                        content = reasoning
+
+                # If content contains thinking tags, strip them if non-empty content remains
+                if isinstance(content, str):
+                    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", content).strip()
+                    if cleaned:
+                        content = cleaned
+                    else:
+                        content = content.strip()
+
+                response_model = data.get("model")
+                if not isinstance(response_model, str) or not response_model.strip():
+                    response_model = profile_config.model
+
+                usage = data.get("usage")
+                usage = usage if isinstance(usage, dict) else {}
+
+                if not isinstance(content, str) or not content.strip():
+                    raise AppError(
+                        ErrorCode.LLM_BAD_OUTPUT,
+                        "OpenAI-compatible provider returned no usable message content.",
+                        502,
+                    )
+
+                return LLMResult(
+                    content=content,
+                    model=response_model,
+                    profile=profile,
+                    prompt_tokens=self._optional_count(usage.get("prompt_tokens")),
+                    completion_tokens=self._optional_count(usage.get("completion_tokens")),
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                )
+            except Exception as exc:
+                if (
+                    not self._is_retryable_chat_error(exc)
+                    or attempt == self.MAX_CHAT_RETRIES - 1
+                ):
+                    raise
+                last_error = exc
+                delay = (
+                    self.RETRY_DELAYS[attempt]
+                    if attempt < len(self.RETRY_DELAYS)
+                    else self.RETRY_DELAYS[-1]
+                )
+                time.sleep(delay)
+
+        if last_error is not None:
+            raise last_error
+        raise AppError(
+            ErrorCode.LLM_UNAVAILABLE,
+            "OpenAI-compatible provider is unavailable.",
+            503,
         )
+
+    @classmethod
+    def _is_retryable_chat_error(cls, exc: Exception) -> bool:
+        if isinstance(exc, httpx.TransportError):
+            return True
+        if isinstance(exc, AppError):
+            if exc.code == ErrorCode.LLM_BAD_OUTPUT:
+                return True
+            if exc.code == ErrorCode.LLM_UNAVAILABLE:
+                msg = exc.message.lower()
+                if (
+                    "authentication failed" in msg
+                    or "http 404" in msg
+                    or "rate limited" in msg
+                ):
+                    return False
+                return True
+        return False
 
     def health(self) -> LLMHealth:
         models = {

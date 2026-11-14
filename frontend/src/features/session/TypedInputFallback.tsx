@@ -1,31 +1,17 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  createSpeechRecognitionController,
+  isSpeechRecognitionSupported,
+  stopAllSpeech,
+  type SpeechRecognitionController,
+} from "../../utils/speech";
 
 interface TypedInputFallbackProps {
   isMicDenied: boolean;
   isDisabled: boolean;
   isSending: boolean;
   onSendTyped: (text: string) => void;
-}
-
-interface BrowserSpeechRecognitionEvent {
-  results: {
-    [index: number]: {
-      [index: number]: {
-        transcript: string;
-      };
-    };
-  };
-}
-
-interface BrowserSpeechRecognitionInstance {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
-  start: () => void;
+  onMicDeniedChange?: (denied: boolean) => void;
 }
 
 export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
@@ -33,45 +19,39 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
   isDisabled,
   isSending,
   onSendTyped,
+  onMicDeniedChange,
 }) => {
   const [text, setText] = useState<string>("");
   const [isListening, setIsListening] = useState<boolean>(false);
+  const recognitionControllerRef = useRef<SpeechRecognitionController | null>(null);
 
-  const isSpeechRecognitionSupported =
-    typeof window !== "undefined" &&
-    Boolean(
-      (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition ||
-        (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition,
-    );
+  useEffect(() => {
+    return () => {
+      recognitionControllerRef.current?.abort();
+      stopAllSpeech();
+    };
+  }, []);
 
   const handleWebSpeech = () => {
     if (isListening || isDisabled || isSending) return;
-    const windowWithSpeech = window as unknown as {
-      SpeechRecognition?: new () => BrowserSpeechRecognitionInstance;
-      webkitSpeechRecognition?: new () => BrowserSpeechRecognitionInstance;
-    };
-    const SpeechRecognitionClass =
-      windowWithSpeech.SpeechRecognition || windowWithSpeech.webkitSpeechRecognition;
-    if (!SpeechRecognitionClass) return;
 
-    try {
-      const recognition = new SpeechRecognitionClass();
-      recognition.lang = "en-US";
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
-      recognition.onerror = () => setIsListening(false);
-      recognition.onresult = (event: BrowserSpeechRecognitionEvent) => {
-        const transcript = event?.results?.[0]?.[0]?.transcript;
-        if (transcript) {
+    if (!recognitionControllerRef.current) {
+      recognitionControllerRef.current = createSpeechRecognitionController({
+        onStart: () => setIsListening(true),
+        onEnd: () => setIsListening(false),
+        onResult: (transcript) => {
           setText((prev) => (prev ? `${prev} ${transcript}` : transcript));
-        }
-      };
-      recognition.start();
-    } catch {
-      setIsListening(false);
+        },
+        onError: (_error, isPermanentDenied) => {
+          setIsListening(false);
+          if (isPermanentDenied) {
+            onMicDeniedChange?.(true);
+          }
+        },
+      });
     }
+
+    recognitionControllerRef.current.start();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -80,6 +60,8 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
     onSendTyped(text.trim());
     setText("");
   };
+
+  const supported = isSpeechRecognitionSupported();
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
@@ -134,7 +116,7 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
             {text.length}/2000 characters
           </span>
           <div className="flex items-center gap-2">
-            {isSpeechRecognitionSupported && (
+            {supported && (
               <button
                 type="button"
                 onClick={handleWebSpeech}

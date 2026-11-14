@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { stopAllSpeech } from "../../utils/speech";
 import type { InteractionMode, PushToTalkState } from "./types";
 
 interface PushToTalkButtonProps {
@@ -30,6 +31,12 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
     state === "speaking" ||
     state === "transcribing" ||
     state === "sending";
+
+  useEffect(() => {
+    return () => {
+      stopAllSpeech();
+    };
+  }, []);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (isMicLocked || isMicDenied) return;
