@@ -443,13 +443,15 @@ class EvaluationCoach:
                 }
             else:
                 score = item.get("score")
-                if isinstance(score, float):
+                if isinstance(score, (int, float)):
                     item["score"] = int(round(score))
-                elif not isinstance(score, int):
+                elif isinstance(score, str) and score.strip():
                     try:
-                        item["score"] = int(score)
+                        item["score"] = int(float(score.strip()))
                     except (ValueError, TypeError):
                         item["score"] = 5
+                else:
+                    item["score"] = 5
                 item["score"] = max(0, min(10, item["score"]))
 
                 if not isinstance(item.get("rationale"), str) or not item["rationale"].strip():
