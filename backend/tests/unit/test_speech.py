@@ -408,3 +408,10 @@ def test_groq_whisper_engine_unconfigured() -> None:
     assert settings.is_stt_configured is False
     engine = GroqWhisperEngine(settings=settings)
     assert engine.status()["status"] == "unavailable"
+
+
+def test_groq_whisper_engine_with_groq_api_key_alias() -> None:
+    settings = Settings(GROQ_API_KEY="gsk_from_groq_dashboard")
+    assert settings.is_stt_configured is True
+    engine = GroqWhisperEngine(settings=settings)
+    assert engine.status()["status"] == "ready"

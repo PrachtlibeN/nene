@@ -133,7 +133,8 @@ export const SessionView: React.FC<SessionViewProps> = ({
           } else if (status.stt?.status === "unavailable") {
             setIsServerSttUnavailable(true);
           }
-        } else if (healthResult.status === "fulfilled") {
+        }
+        if (healthResult.status === "fulfilled") {
           const health = healthResult.value;
           if (health.components?.stt?.status === "ready") {
             setIsServerSttUnavailable(false);
@@ -221,8 +222,10 @@ export const SessionView: React.FC<SessionViewProps> = ({
   // Push-to-talk: Start recording
   const handleStartRecording = async () => {
     unlockSpeechAudio();
-    cancelSpeech();
-    speechRef.current.stop();
+    if (state === "speaking") {
+      cancelSpeech();
+      speechRef.current.stop();
+    }
     setActiveSpeakingTurn(null);
     if (state !== "idle" && state !== "speaking") return;
     setError(null);
@@ -447,18 +450,14 @@ export const SessionView: React.FC<SessionViewProps> = ({
     } catch (err) {
       if (err instanceof ApiError && err.code === "STT_UNAVAILABLE") {
         setIsServerSttUnavailable(true);
-        if (isSpeechRecognitionSupported()) {
-          setError(
-            new Error(
-              "Server speech recognition is unavailable on this cloud tier. Push-to-talk has automatically switched to your browser's speech recognition engine.",
-            ),
-          );
-        } else {
+        if (!isSpeechRecognitionSupported()) {
           setError(
             new Error(
               "Speech recognition is unavailable on this server tier and not supported by your browser. Please type your response below.",
             ),
           );
+        } else {
+          setError(null);
         }
       } else {
         setError(err);
@@ -585,8 +584,6 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
   const handleReplayTurn = (text: string, speakerId?: string) => {
     unlockSpeechAudio();
-    cancelSpeech();
-    speechRef.current.stop();
     setState("speaking");
     const persona = (scenario.definition.personas ?? []).find(
       (panelPersona) => panelPersona.id === speakerId,

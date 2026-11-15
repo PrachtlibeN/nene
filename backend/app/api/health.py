@@ -65,7 +65,7 @@ def get_health(request: Request) -> HealthOut:
 
     speech_engine = getattr(request.app.state, "speech_engine", None)
     if speech_engine is None:
-        speech_engine = get_speech_engine()
+        speech_engine = get_speech_engine(settings)
     speech_status = cast(SpeechEngine, speech_engine).status()
     raw_stt_status = speech_status.get("status", "loading")
     if raw_stt_status not in ("ready", "loading", "unavailable"):

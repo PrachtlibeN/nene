@@ -61,10 +61,11 @@ describe("SpeechSynthesisController", () => {
     expect(onEnd).toHaveBeenCalledOnce();
   });
 
-  it("unlockSpeechAudio dispatches a silent utterance to unlock audio", () => {
-    const speakSpy = vi.spyOn(window.speechSynthesis, "speak").mockImplementation(() => {});
+  it("unlockSpeechAudio unpauses speechSynthesis to ensure audio is ready", () => {
+    vi.spyOn(window.speechSynthesis, "paused", "get").mockReturnValue(true);
+    const resumeSpy = vi.spyOn(window.speechSynthesis, "resume").mockImplementation(() => {});
     unlockSpeechAudio();
-    expect(speakSpy).toHaveBeenCalled();
+    expect(resumeSpy).toHaveBeenCalled();
   });
 
   it("ensureVoicesLoaded resolves loaded voices or fallback", async () => {

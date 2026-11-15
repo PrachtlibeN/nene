@@ -508,19 +508,24 @@ _engine_instance: SpeechEngine | None = None
 _engine_lock = threading.Lock()
 
 
-def get_speech_engine() -> SpeechEngine:
+def get_speech_engine(settings: Settings | None = None) -> SpeechEngine:
     global _engine_instance
-    if _engine_instance is None:
+    current_settings = settings or get_settings()
+    if _engine_instance is None or (
+        current_settings.is_stt_configured
+        and not isinstance(_engine_instance, (GroqWhisperEngine, FakeSpeechEngine))
+    ):
         with _engine_lock:
-            if _engine_instance is None:
+            if _engine_instance is None or (
+                current_settings.is_stt_configured
+                and not isinstance(_engine_instance, (GroqWhisperEngine, FakeSpeechEngine))
+            ):
                 if os.environ.get("PYTEST_CURRENT_TEST"):
                     _engine_instance = FakeSpeechEngine()
+                elif current_settings.is_stt_configured:
+                    _engine_instance = GroqWhisperEngine(current_settings)
                 else:
-                    settings = get_settings()
-                    if settings.is_stt_configured:
-                        _engine_instance = GroqWhisperEngine(settings)
-                    else:
-                        _engine_instance = FasterWhisperEngine()
+                    _engine_instance = FasterWhisperEngine()
     return _engine_instance
 
 

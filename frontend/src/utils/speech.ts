@@ -403,27 +403,17 @@ export function createSpeechRecognitionController(
   };
 }
 
-let audioUnlocked = false;
-
 /**
- * Plays a silent (volume=0) utterance on user gesture to permanently unlock
- * speech synthesis audio in browsers with strict autoplay policies (iOS/Safari/Chrome).
+ * Ensures speech synthesis engine is active and unpaused.
+ * Calls resume() on SpeechSynthesis to clear any paused/dormant states
+ * across browsers without dispatching problematic empty utterances.
  */
 export function unlockSpeechAudio(): void {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  if (audioUnlocked) return;
   try {
-    const utterance = new window.SpeechSynthesisUtterance("");
-    utterance.volume = 0;
-    utterance.rate = 10;
-    utterance.onend = () => {
-      audioUnlocked = true;
-    };
-    utterance.onerror = () => {
-      audioUnlocked = true;
-    };
-    window.speechSynthesis.speak(utterance);
-    audioUnlocked = true;
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
   } catch {
     // ignore
   }
@@ -623,7 +613,15 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
       activeSequenceId += 1;
       const sequenceId = activeSequenceId;
       clearTimers();
-      window.speechSynthesis.cancel();
+      const isSpeakingOrPending =
+        typeof window !== "undefined" &&
+        window.speechSynthesis &&
+        (window.speechSynthesis.speaking || window.speechSynthesis.pending);
+
+      if (isSpeakingOrPending) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+      }
 
       // Split items into smaller sentence chunks to avoid browser synthesis speech dropouts
       interface FlattenedChunk {
@@ -745,6 +743,19 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
 
         window.speechSynthesis.speak(utterance);
 
+        // Immediate unpause in case browser placed speak() into paused state
+        try {
+          if (
+            typeof window !== "undefined" &&
+            window.speechSynthesis &&
+            window.speechSynthesis.paused
+          ) {
+            window.speechSynthesis.resume();
+          }
+        } catch {
+          // ignore
+        }
+
         // Fallback watchdog: If browser swallowed the utterance, resume and re-dispatch speak once
         retrySwallowTimer = setTimeout(() => {
           retrySwallowTimer = null;
@@ -752,12 +763,15 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
           try {
             if (
               typeof window !== "undefined" &&
-              window.speechSynthesis &&
-              !window.speechSynthesis.speaking &&
-              !window.speechSynthesis.pending
+              window.speechSynthesis
             ) {
-              window.speechSynthesis.resume();
-              window.speechSynthesis.speak(utterance);
+              if (window.speechSynthesis.paused) {
+                window.speechSynthesis.resume();
+              }
+              if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+                window.speechSynthesis.resume();
+                window.speechSynthesis.speak(utterance);
+              }
             }
           } catch {
             // ignore
@@ -765,12 +779,17 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         }, 250);
       };
 
-      // Delay 60ms after cancel() to prevent Chromium cancel() from swallowing subsequent speak()
-      cancelGraceTimer = setTimeout(() => {
-        cancelGraceTimer = null;
-        if (sequenceId !== activeSequenceId) return;
+      if (isSpeakingOrPending) {
+        // Delay 60ms after cancel() to prevent Chromium cancel() from swallowing subsequent speak()
+        cancelGraceTimer = setTimeout(() => {
+          cancelGraceTimer = null;
+          if (sequenceId !== activeSequenceId) return;
+          speakNextChunk();
+        }, 60);
+      } else {
+        // Idle synthesis, speak immediately without delay
         speakNextChunk();
-      }, 60);
+      }
     } catch {
       clearTimers();
       if (onError) onError();

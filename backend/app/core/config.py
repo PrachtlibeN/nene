@@ -94,15 +94,31 @@ class Settings(BaseSettings):
     whisper_compute_type: str = "default"
     stt_api_key: SecretStr = Field(
         default=SecretStr(""),
-        validation_alias=AliasChoices("STT_API_KEY", "ECHOROLE_STT_API_KEY"),
+        validation_alias=AliasChoices(
+            "STT_API_KEY",
+            "ECHOROLE_STT_API_KEY",
+            "GROQ_API_KEY",
+            "GROQ_STT_API_KEY",
+            "ECHOROLE_GROQ_API_KEY",
+        ),
     )
     stt_base_url: str = Field(
         default="https://api.groq.com/openai/v1",
-        validation_alias=AliasChoices("STT_BASE_URL", "ECHOROLE_STT_BASE_URL"),
+        validation_alias=AliasChoices(
+            "STT_BASE_URL",
+            "ECHOROLE_STT_BASE_URL",
+            "GROQ_BASE_URL",
+            "ECHOROLE_GROQ_BASE_URL",
+        ),
     )
     stt_model: str = Field(
         default="whisper-large-v3-turbo",
-        validation_alias=AliasChoices("STT_MODEL", "ECHOROLE_STT_MODEL"),
+        validation_alias=AliasChoices(
+            "STT_MODEL",
+            "ECHOROLE_STT_MODEL",
+            "GROQ_MODEL",
+            "ECHOROLE_GROQ_MODEL",
+        ),
     )
     max_audio_seconds: int = Field(default=120, ge=1)
     max_audio_mb: int = Field(default=10, ge=1)
