@@ -4,7 +4,14 @@ import json
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -85,9 +92,25 @@ class Settings(BaseSettings):
     whisper_model: str = "unconfigured"
     whisper_device: str = "auto"
     whisper_compute_type: str = "default"
+    stt_api_key: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("STT_API_KEY", "ECHOROLE_STT_API_KEY"),
+    )
+    stt_base_url: str = Field(
+        default="https://api.groq.com/openai/v1",
+        validation_alias=AliasChoices("STT_BASE_URL", "ECHOROLE_STT_BASE_URL"),
+    )
+    stt_model: str = Field(
+        default="whisper-large-v3-turbo",
+        validation_alias=AliasChoices("STT_MODEL", "ECHOROLE_STT_MODEL"),
+    )
     max_audio_seconds: int = Field(default=120, ge=1)
     max_audio_mb: int = Field(default=10, ge=1)
     session_idle_timeout_minutes: int = Field(default=60, ge=1)
+
+    @property
+    def is_stt_configured(self) -> bool:
+        return bool(self.stt_api_key.get_secret_value().strip())
 
     @field_validator("ollama_model", "openai_model")
     @classmethod

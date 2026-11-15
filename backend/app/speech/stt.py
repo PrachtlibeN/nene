@@ -9,7 +9,9 @@ import threading
 import time
 from typing import Any, Literal
 
-from app.core.config import get_settings
+import httpx
+
+from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCode
 from app.speech.interfaces import FakeSpeechEngine, SpeechEngine, SpeechSegment, Transcription
 
@@ -311,6 +313,197 @@ class FasterWhisperEngine:
         )
 
 
+class GroqWhisperEngine:
+    """OpenAI-compatible Whisper speech recognition engine (e.g. Groq Cloud Whisper API)."""
+
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        client: httpx.Client | None = None,
+    ) -> None:
+        self._settings = settings or get_settings()
+        self._api_key = self._settings.stt_api_key.get_secret_value().strip()
+        self._base_url = self._settings.stt_base_url.rstrip("/")
+        self.model_name = self._settings.stt_model or "whisper-large-v3-turbo"
+        self._client = client or httpx.Client(timeout=30.0)
+        self._owns_client = client is None
+
+    def close(self) -> None:
+        if self._owns_client:
+            self._client.close()
+
+    def status(self) -> dict[str, object]:
+        if not self._api_key:
+            return {
+                "status": "unavailable",
+                "engine": "groq-whisper",
+                "model": self.model_name,
+                "device": "cloud",
+                "language": "en",
+                "detail": "STT_API_KEY is not configured.",
+            }
+        return {
+            "status": "ready",
+            "engine": "groq-whisper",
+            "model": self.model_name,
+            "device": "cloud",
+            "language": "en",
+            "detail": None,
+        }
+
+    def transcribe(self, audio: bytes, content_type: str) -> Transcription:
+        if not audio or len(audio) == 0:
+            raise AppError(
+                ErrorCode.AUDIO_EMPTY_OR_SILENT,
+                "Audio file is empty.",
+                422,
+            )
+        if not self._api_key:
+            raise AppError(
+                ErrorCode.STT_UNAVAILABLE,
+                "Remote STT is unavailable: STT_API_KEY is not configured.",
+                503,
+            )
+
+        ext = "webm"
+        if "ogg" in content_type:
+            ext = "ogg"
+        elif "wav" in content_type:
+            ext = "wav"
+        elif "mp4" in content_type or "m4a" in content_type:
+            ext = "mp4"
+        elif "mpeg" in content_type or "mp3" in content_type:
+            ext = "mp3"
+        filename = f"audio.{ext}"
+
+        url = f"{self._base_url}/audio/transcriptions"
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        data = {
+            "model": self.model_name,
+            "language": "en",
+            "response_format": "verbose_json",
+        }
+
+        started_at = time.perf_counter()
+        retries = 3
+        backoff_delays = (1.0, 2.0, 3.0)
+        payload: dict[str, Any] = {}
+
+        for attempt in range(retries):
+            try:
+                files = {"file": (filename, audio, content_type)}
+                response = self._client.post(
+                    url,
+                    headers=headers,
+                    data=data,
+                    files=files,
+                )
+                if response.status_code == 429:
+                    if attempt < retries - 1:
+                        time.sleep(backoff_delays[attempt])
+                        continue
+                    raise AppError(
+                        ErrorCode.STT_UNAVAILABLE,
+                        (
+                            "Groq Whisper STT is temporarily rate limited. "
+                            "Please try again or use text input."
+                        ),
+                        503,
+                    )
+                if response.status_code in (401, 403):
+                    raise AppError(
+                        ErrorCode.STT_UNAVAILABLE,
+                        "Groq Whisper STT authentication failed (invalid STT_API_KEY).",
+                        503,
+                    )
+                if response.status_code >= 500:
+                    if attempt < retries - 1:
+                        time.sleep(backoff_delays[attempt])
+                        continue
+                    raise AppError(
+                        ErrorCode.STT_UNAVAILABLE,
+                        f"Groq Whisper STT server returned status {response.status_code}.",
+                        503,
+                    )
+                if response.status_code >= 400:
+                    raise AppError(
+                        ErrorCode.AUDIO_UNSUPPORTED_FORMAT,
+                        f"STT transcription failed with error: {response.text}",
+                        response.status_code if response.status_code in (415, 422) else 400,
+                    )
+
+                payload = response.json()
+                break
+            except httpx.RequestError as exc:
+                if attempt < retries - 1:
+                    time.sleep(backoff_delays[attempt])
+                    continue
+                logger.error("Groq Whisper STT network error: %s", exc)
+                raise AppError(
+                    ErrorCode.STT_UNAVAILABLE,
+                    f"Remote STT service is unreachable: {exc}",
+                    503,
+                ) from exc
+
+        processing_ms = int((time.perf_counter() - started_at) * 1000)
+        raw_text = str(payload.get("text", ""))
+        full_text = " ".join(raw_text.split()).strip()
+
+        if not full_text:
+            raise AppError(
+                ErrorCode.AUDIO_EMPTY_OR_SILENT,
+                "No speech detected in audio.",
+                422,
+            )
+
+        words = full_text.split()
+        duration_s = payload.get("duration")
+        duration_ms = (
+            int(float(duration_s) * 1000)
+            if duration_s is not None
+            else max(1000, int((len(words) / 135) * 60 * 1000))
+        )
+
+        speech_segments: list[SpeechSegment] = []
+        raw_segments = payload.get("segments") or []
+        if isinstance(raw_segments, list):
+            for seg in raw_segments:
+                if isinstance(seg, dict):
+                    start_ms = int(float(seg.get("start", 0)) * 1000)
+                    end_ms = int(float(seg.get("end", 0)) * 1000)
+                    seg_text = str(seg.get("text", "")).strip()
+                    avg_logprob = seg.get("avg_logprob")
+                    confidence = (
+                        round(math.exp(float(avg_logprob)), 2)
+                        if avg_logprob is not None
+                        else None
+                    )
+                    speech_segments.append(SpeechSegment(start_ms, end_ms, seg_text, confidence))
+
+        if not speech_segments:
+            speech_segments.append(SpeechSegment(0, duration_ms, full_text, 0.95))
+
+        avg_confidence = (
+            round(
+                sum(s.confidence for s in speech_segments if s.confidence is not None)
+                / len(speech_segments),
+                2,
+            )
+            if speech_segments and any(s.confidence is not None for s in speech_segments)
+            else 0.95
+        )
+
+        return Transcription(
+            text=full_text,
+            language="en",
+            duration_ms=duration_ms,
+            avg_confidence=avg_confidence,
+            word_count=len(words),
+            processing_ms=processing_ms,
+            segments=speech_segments,
+        )
+
+
 _engine_instance: SpeechEngine | None = None
 _engine_lock = threading.Lock()
 
@@ -323,7 +516,11 @@ def get_speech_engine() -> SpeechEngine:
                 if os.environ.get("PYTEST_CURRENT_TEST"):
                     _engine_instance = FakeSpeechEngine()
                 else:
-                    _engine_instance = FasterWhisperEngine()
+                    settings = get_settings()
+                    if settings.is_stt_configured:
+                        _engine_instance = GroqWhisperEngine(settings)
+                    else:
+                        _engine_instance = FasterWhisperEngine()
     return _engine_instance
 
 

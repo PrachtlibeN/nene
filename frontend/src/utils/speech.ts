@@ -173,6 +173,8 @@ export function stopAllSpeech(): void {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     try {
       window.speechSynthesis.cancel();
+      // Chrome/Edge bug: cancel() can leave the synthesis engine in a paused state
+      window.speechSynthesis.resume();
     } catch {
       // ignore errors on cancel
     }
@@ -527,6 +529,7 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
     if (isSupported()) {
       try {
         window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
       } catch {
         // ignore errors on cancel
       }
@@ -688,9 +691,15 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         if (voice) utterance.voice = voice;
 
         let finished = false;
+        let retrySwallowTimer: ReturnType<typeof setTimeout> | null = null;
+
         const handleDone = () => {
           if (finished) return;
           finished = true;
+          if (retrySwallowTimer) {
+            clearTimeout(retrySwallowTimer);
+            retrySwallowTimer = null;
+          }
           if (watchdogTimer) {
             clearTimeout(watchdogTimer);
             watchdogTimer = null;
@@ -721,7 +730,39 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         utterance.onend = handleDone;
         utterance.onerror = handleDone;
 
+        // Unpause if synthesis is paused
+        try {
+          if (
+            typeof window !== "undefined" &&
+            window.speechSynthesis &&
+            window.speechSynthesis.paused
+          ) {
+            window.speechSynthesis.resume();
+          }
+        } catch {
+          // ignore
+        }
+
         window.speechSynthesis.speak(utterance);
+
+        // Fallback watchdog: If browser swallowed the utterance, resume and re-dispatch speak once
+        retrySwallowTimer = setTimeout(() => {
+          retrySwallowTimer = null;
+          if (finished || sequenceId !== activeSequenceId) return;
+          try {
+            if (
+              typeof window !== "undefined" &&
+              window.speechSynthesis &&
+              !window.speechSynthesis.speaking &&
+              !window.speechSynthesis.pending
+            ) {
+              window.speechSynthesis.resume();
+              window.speechSynthesis.speak(utterance);
+            }
+          } catch {
+            // ignore
+          }
+        }, 250);
       };
 
       // Delay 60ms after cancel() to prevent Chromium cancel() from swallowing subsequent speak()

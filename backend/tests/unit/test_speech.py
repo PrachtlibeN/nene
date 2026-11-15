@@ -4,6 +4,7 @@ import struct
 import wave
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -13,6 +14,7 @@ from app.speech.interfaces import FakeSpeechEngine, SpeechSegment
 from app.speech.stt import (
     ACCEPTED_AUDIO_TYPES,
     FasterWhisperEngine,
+    GroqWhisperEngine,
     reset_speech_engine,
     set_speech_engine,
 )
@@ -361,3 +363,48 @@ def test_faster_whisper_engine_opt_in() -> None:
         engine.transcribe(silent_wav, "audio/wav")
 
     assert getattr(exc_info.value, "code", None) == "AUDIO_EMPTY_OR_SILENT"
+
+
+def test_groq_whisper_engine_status_and_transcribe() -> None:
+    settings = Settings(
+        STT_API_KEY="gsk_mock_api_key",
+        STT_BASE_URL="https://api.groq.com/openai/v1",
+        STT_MODEL="whisper-large-v3-turbo",
+    )
+    assert settings.is_stt_configured is True
+
+    mock_resp = httpx.Response(
+        200,
+        json={
+            "text": "Hello world, this is a test.",
+            "duration": 2.5,
+            "segments": [
+                {
+                    "start": 0.0,
+                    "end": 2.5,
+                    "text": "Hello world, this is a test.",
+                    "avg_logprob": -0.1,
+                }
+            ],
+        },
+    )
+    mock_client = httpx.Client(transport=httpx.MockTransport(lambda req: mock_resp))
+    engine = GroqWhisperEngine(settings=settings, client=mock_client)
+
+    status = engine.status()
+    assert status["status"] == "ready"
+    assert status["engine"] == "groq-whisper"
+    assert status["model"] == "whisper-large-v3-turbo"
+
+    res = engine.transcribe(b"fake audio bytes", "audio/webm")
+    assert res.text == "Hello world, this is a test."
+    assert res.duration_ms == 2500
+    assert res.word_count == 6
+    assert len(res.segments) == 1
+
+
+def test_groq_whisper_engine_unconfigured() -> None:
+    settings = Settings(STT_API_KEY="")
+    assert settings.is_stt_configured is False
+    engine = GroqWhisperEngine(settings=settings)
+    assert engine.status()["status"] == "unavailable"

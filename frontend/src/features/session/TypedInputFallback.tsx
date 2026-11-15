@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   createSpeechRecognitionController,
   isSpeechRecognitionSupported,
-  stopAllSpeech,
   type SpeechRecognitionController,
 } from "../../utils/speech";
 
@@ -32,7 +31,6 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
   useEffect(() => {
     return () => {
       recognitionControllerRef.current?.abort();
-      stopAllSpeech();
     };
   }, []);
 

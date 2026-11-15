@@ -123,28 +123,27 @@ export const SessionView: React.FC<SessionViewProps> = ({
     Promise.allSettled([api.getSpeechStatus(), api.getHealth()])
       .then(([speechResult, healthResult]) => {
         if (!mounted) return;
-        let serverSttReady = false;
         if (speechResult.status === "fulfilled") {
           const status = speechResult.value;
           if (status.limits?.max_audio_seconds) {
             setMaxAudioSeconds(status.limits.max_audio_seconds);
           }
           if (status.stt?.status === "ready") {
-            serverSttReady = true;
+            setIsServerSttUnavailable(false);
+          } else if (status.stt?.status === "unavailable") {
+            setIsServerSttUnavailable(true);
           }
-        }
-        if (healthResult.status === "fulfilled") {
+        } else if (healthResult.status === "fulfilled") {
           const health = healthResult.value;
           if (health.components?.stt?.status === "ready") {
-            serverSttReady = true;
+            setIsServerSttUnavailable(false);
+          } else if (health.components?.stt?.status === "unavailable") {
+            setIsServerSttUnavailable(true);
           }
-        }
-        if (!serverSttReady) {
-          setIsServerSttUnavailable(true);
         }
       })
       .catch(() => {
-        if (mounted) setIsServerSttUnavailable(true);
+        // Do not force unavailable on network errors; processAudioTranscription will catch STT_UNAVAILABLE
       });
     const speech = speechRef.current;
     return () => {
@@ -474,8 +473,10 @@ export const SessionView: React.FC<SessionViewProps> = ({
     source: "speech" | "typed",
     speechMeta: SpeechMeta | null,
   ) => {
-    cancelSpeech();
-    speechRef.current.stop();
+    if (activeSpeakingTurn !== null || state === "speaking") {
+      cancelSpeech();
+      speechRef.current.stop();
+    }
     setActiveSpeakingTurn(null);
     setState("sending");
     setError(null);
@@ -545,7 +546,10 @@ export const SessionView: React.FC<SessionViewProps> = ({
   };
 
   const handleSendReviewedSpeech = (text: string) => {
-    cancelSpeech();
+    unlockSpeechAudio();
+    if (activeSpeakingTurn !== null || state === "speaking") {
+      cancelSpeech();
+    }
     submitTurn(text, "speech", reviewSpeechMeta);
   };
 
@@ -558,7 +562,9 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
   const handleSendTyped = (text: string) => {
     unlockSpeechAudio();
-    cancelSpeech();
+    if (activeSpeakingTurn !== null || state === "speaking") {
+      cancelSpeech();
+    }
     const trimmed = text.trim();
     const words = trimmed.split(/\s+/).filter(Boolean);
     const estimatedDurationMs = Math.max(1000, Math.round((words.length / 135) * 60 * 1000));
