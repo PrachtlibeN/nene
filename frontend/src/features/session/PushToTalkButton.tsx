@@ -11,6 +11,8 @@ interface PushToTalkButtonProps {
   recordingSeconds: number;
   maxAudioSeconds: number;
   isMicDenied: boolean;
+  isServerSttUnavailable?: boolean;
+  isBrowserSpeechSupported?: boolean;
   onMuteSpeaker?: () => void;
 }
 
@@ -23,6 +25,8 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
   recordingSeconds,
   maxAudioSeconds,
   isMicDenied,
+  isServerSttUnavailable,
+  isBrowserSpeechSupported,
   onMuteSpeaker,
 }) => {
   const isRecording = state === "recording";
@@ -31,6 +35,10 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
     state === "speaking" ||
     state === "transcribing" ||
     state === "sending";
+  const isButtonDisabled =
+    isMicLocked ||
+    isMicDenied ||
+    (Boolean(isServerSttUnavailable) && !isBrowserSpeechSupported);
 
   useEffect(() => {
     return () => {
@@ -39,7 +47,7 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
   }, []);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (isMicLocked || isMicDenied) return;
+    if (isButtonDisabled) return;
     if (mode === "hold" && state === "idle") {
       e.preventDefault();
       onStartRecording();
@@ -54,7 +62,7 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
   };
 
   const handleClick = (e: React.MouseEvent) => {
-    if (isMicLocked || isMicDenied) return;
+    if (isButtonDisabled) return;
     if (mode === "toggle") {
       e.preventDefault();
       if (isRecording) {
@@ -103,7 +111,7 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
         )}
         <button
           type="button"
-          disabled={isMicLocked || isMicDenied}
+          disabled={isButtonDisabled}
           aria-label={
             isRecording
               ? "Stop recording"
@@ -115,7 +123,7 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
           onPointerUp={handlePointerUp}
           onClick={handleClick}
           className={`relative flex h-20 w-20 items-center justify-center rounded-full shadow-lg transition-all focus:outline-none ${
-            isMicLocked || isMicDenied
+            isButtonDisabled
               ? "bg-slate-300 text-slate-500 cursor-not-allowed opacity-60"
               : isRecording
                 ? "bg-rose-600 text-white scale-105 shadow-rose-200"
@@ -199,6 +207,21 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
             <span className="font-medium text-rose-500">
               Mic unavailable &bull; Use typed response below
             </span>
+          ) : isServerSttUnavailable && !isBrowserSpeechSupported ? (
+            <span className="font-medium text-amber-600">
+              Speech recognition unavailable &bull; Type your response below
+            </span>
+          ) : isServerSttUnavailable ? (
+            <div className="flex flex-col items-center">
+              <span className="text-slate-500">
+                {mode === "hold"
+                  ? "Hold button to speak (Browser Speech)"
+                  : "Click button to speak (Browser Speech)"}
+              </span>
+              <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full mt-0.5">
+                Web Speech API
+              </span>
+            </div>
           ) : (
             <span className="text-slate-500">
               {mode === "hold" ? "Hold button to speak" : "Click button to start recording"}

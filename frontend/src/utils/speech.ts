@@ -21,6 +21,7 @@ export interface SpeechSequenceItem {
 
 export interface BrowserSpeechRecognitionEvent {
   results: {
+    length?: number;
     [index: number]: {
       [index: number]: {
         transcript: string;
@@ -131,6 +132,7 @@ export function createSpeechRecognitionController(
     recognition.lang = "en-US";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
+    recognition.continuous = true;
 
     recognition.onstart = () => {
       isStarting = false;
@@ -159,9 +161,21 @@ export function createSpeechRecognitionController(
     };
 
     recognition.onresult = (event: BrowserSpeechRecognitionEvent) => {
-      const transcript = event?.results?.[0]?.[0]?.transcript;
-      if (transcript) {
-        callbacks.onResult?.(transcript);
+      let fullTranscript = "";
+      if (event && event.results) {
+        const len = typeof event.results.length === "number" ? event.results.length : 1;
+        for (let i = 0; i < len; i++) {
+          const item = event.results[i]?.[0]?.transcript;
+          if (item) {
+            fullTranscript += (fullTranscript ? " " : "") + item.trim();
+          }
+        }
+      }
+      if (!fullTranscript && event?.results?.[0]?.[0]?.transcript) {
+        fullTranscript = event.results[0][0].transcript;
+      }
+      if (fullTranscript) {
+        callbacks.onResult?.(fullTranscript);
       }
     };
 

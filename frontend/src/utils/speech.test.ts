@@ -61,6 +61,7 @@ describe("SpeechRecognitionController & stopAllSpeech", () => {
     lang = "en-US";
     interimResults = false;
     maxAlternatives = 1;
+    continuous = false;
     onstart: (() => void) | null = null;
     onend: (() => void) | null = null;
     onerror: ((event: BrowserSpeechRecognitionErrorEvent) => void) | null = null;
@@ -72,12 +73,11 @@ describe("SpeechRecognitionController & stopAllSpeech", () => {
 
   it("stopAllSpeech aborts active recognition and cancels speech synthesis", () => {
     const cancelSpy = vi.spyOn(window.speechSynthesis, "cancel");
-    let currentInstance: BaseMockRecognition | null = null;
+    const active = new BaseMockRecognition();
 
-    class TestRecognition extends BaseMockRecognition {
+    class TestRecognition {
       constructor() {
-        super();
-        currentInstance = this;
+        return active;
       }
     }
     vi.stubGlobal("SpeechRecognition", TestRecognition);
@@ -85,22 +85,19 @@ describe("SpeechRecognitionController & stopAllSpeech", () => {
     const controller = createSpeechRecognitionController({});
     controller.start();
 
-    expect(currentInstance).not.toBeNull();
     stopAllSpeech();
 
-    const active = currentInstance as BaseMockRecognition | null;
-    expect(active?.abort).toHaveBeenCalled();
+    expect(active.abort).toHaveBeenCalled();
     expect(cancelSpy).toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 
   it("guards against overlapping start calls", () => {
-    let currentInstance: BaseMockRecognition | null = null;
+    const active = new BaseMockRecognition();
 
-    class TestRecognition extends BaseMockRecognition {
+    class TestRecognition {
       constructor() {
-        super();
-        currentInstance = this;
+        return active;
       }
     }
     vi.stubGlobal("SpeechRecognition", TestRecognition);
@@ -109,8 +106,7 @@ describe("SpeechRecognitionController & stopAllSpeech", () => {
     controller.start();
     controller.start(); // second call while starting
 
-    const active = currentInstance as BaseMockRecognition | null;
-    expect(active?.start).toHaveBeenCalledTimes(1);
+    expect(active.start).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
 
@@ -118,10 +114,9 @@ describe("SpeechRecognitionController & stopAllSpeech", () => {
     let callCount = 0;
     const instances: BaseMockRecognition[] = [];
 
-    class TestRecognition extends BaseMockRecognition {
+    class TestRecognition {
       constructor() {
-        super();
-        const inst = this;
+        const inst = new BaseMockRecognition();
         instances.push(inst);
         inst.start = vi.fn(() => {
           callCount += 1;
@@ -131,6 +126,7 @@ describe("SpeechRecognitionController & stopAllSpeech", () => {
             throw err;
           }
         });
+        return inst;
       }
     }
     vi.stubGlobal("SpeechRecognition", TestRecognition);
@@ -147,12 +143,11 @@ describe("SpeechRecognitionController & stopAllSpeech", () => {
   });
 
   it("distinguishes permanent mic denial from temporary errors", () => {
-    let lastInstance: BaseMockRecognition | null = null;
+    const target = new BaseMockRecognition();
 
-    class TestRecognition extends BaseMockRecognition {
+    class TestRecognition {
       constructor() {
-        super();
-        lastInstance = this;
+        return target;
       }
     }
     vi.stubGlobal("SpeechRecognition", TestRecognition);
@@ -162,15 +157,13 @@ describe("SpeechRecognitionController & stopAllSpeech", () => {
 
     // Temporary error like 'no-speech'
     controller.start();
-    const target1 = lastInstance as BaseMockRecognition | null;
-    target1?.onerror?.({ error: "no-speech" });
+    target.onerror?.({ error: "no-speech" });
     expect(onError).toHaveBeenLastCalledWith("no-speech", false);
     expect(controller.isListening()).toBe(false);
 
     // Permanent denial like 'not-allowed'
     controller.start();
-    const target2 = lastInstance as BaseMockRecognition | null;
-    target2?.onerror?.({ error: "not-allowed" });
+    target.onerror?.({ error: "not-allowed" });
     expect(onError).toHaveBeenLastCalledWith("not-allowed", true);
     expect(controller.isListening()).toBe(false);
 

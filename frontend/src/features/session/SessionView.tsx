@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
+  ApiError,
   type ScenarioOut,
   type SessionOut,
   type SpeechMeta,
@@ -8,8 +9,11 @@ import {
 } from "../../api/client";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import {
+  createSpeechRecognitionController,
   createSpeechSynthesisController,
+  isSpeechRecognitionSupported,
   stopAllSpeech,
+  type SpeechRecognitionController,
   type SpeechSequenceItem,
 } from "../../utils/speech";
 import { PushToTalkButton } from "./PushToTalkButton";
@@ -61,12 +65,15 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const [reviewSpeechMeta, setReviewSpeechMeta] = useState<SpeechMeta | null>(null);
 
   const [isMicDenied, setIsMicDenied] = useState<boolean>(false);
+  const [isServerSttUnavailable, setIsServerSttUnavailable] = useState<boolean>(false);
   const [error, setError] = useState<unknown | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const speechRef = useRef(createSpeechSynthesisController());
+  const webSpeechTranscriptRef = useRef<string>("");
+  const pttRecognitionControllerRef = useRef<SpeechRecognitionController | null>(null);
 
   // Fetch speech status limits on mount
   useEffect(() => {
@@ -77,6 +84,9 @@ export const SessionView: React.FC<SessionViewProps> = ({
         if (!mounted) return;
         if (status.limits?.max_audio_seconds) {
           setMaxAudioSeconds(status.limits.max_audio_seconds);
+        }
+        if (status.stt?.status === "unavailable") {
+          setIsServerSttUnavailable(true);
         }
       })
       .catch(() => {
@@ -96,6 +106,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
           // ignore error on stop
         }
       }
+      pttRecognitionControllerRef.current?.abort();
       speech.stop();
       stopAllSpeech();
     };
@@ -128,6 +139,52 @@ export const SessionView: React.FC<SessionViewProps> = ({
       setState("recording");
       setRecordingSeconds(0);
       startTimer();
+      return;
+    }
+
+    // If server STT is unavailable and browser supports Web Speech API, use browser speech recognition!
+    if (isServerSttUnavailable && isSpeechRecognitionSupported()) {
+      webSpeechTranscriptRef.current = "";
+      if (!pttRecognitionControllerRef.current) {
+        pttRecognitionControllerRef.current = createSpeechRecognitionController({
+          onStart: () => {
+            setState("recording");
+            setRecordingSeconds(0);
+            startTimer();
+          },
+          onResult: (transcript) => {
+            webSpeechTranscriptRef.current = transcript;
+          },
+          onError: (_err, isPermanentDenied) => {
+            if (isPermanentDenied) {
+              setIsMicDenied(true);
+            }
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
+            setState("idle");
+          },
+        });
+      }
+      try {
+        pttRecognitionControllerRef.current.start();
+        setState("recording");
+        setRecordingSeconds(0);
+        startTimer();
+      } catch {
+        setState("idle");
+      }
+      return;
+    }
+
+    // If server STT is unavailable and browser does NOT support Web Speech API
+    if (isServerSttUnavailable && !isSpeechRecognitionSupported()) {
+      setError(
+        new Error(
+          "Speech recognition is unavailable on this server tier and not supported by your browser. Please type your response below.",
+        ),
+      );
       return;
     }
 
@@ -214,6 +271,28 @@ export const SessionView: React.FC<SessionViewProps> = ({
       return;
     }
 
+    // If using browser Web Speech API
+    if (isServerSttUnavailable && isSpeechRecognitionSupported()) {
+      setState("transcribing");
+      pttRecognitionControllerRef.current?.stop();
+      setTimeout(() => {
+        const transcript = webSpeechTranscriptRef.current.trim();
+        if (transcript.length > 0) {
+          setReviewText(transcript);
+          setReviewSpeechMeta({
+            duration_ms: recordingSeconds * 1000,
+            word_count: transcript.split(/\s+/).length,
+            language: "en",
+            avg_confidence: 0.95,
+          });
+          setState("review");
+        } else {
+          setState("idle");
+        }
+      }, 300);
+      return;
+    }
+
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state === "recording"
@@ -241,7 +320,24 @@ export const SessionView: React.FC<SessionViewProps> = ({
       // Transition to review: No auto-send!
       setState("review");
     } catch (err) {
-      setError(err);
+      if (err instanceof ApiError && err.code === "STT_UNAVAILABLE") {
+        setIsServerSttUnavailable(true);
+        if (isSpeechRecognitionSupported()) {
+          setError(
+            new Error(
+              "Server speech recognition is unavailable on this cloud tier. Push-to-talk has automatically switched to your browser's speech recognition engine.",
+            ),
+          );
+        } else {
+          setError(
+            new Error(
+              "Speech recognition is unavailable on this server tier and not supported by your browser. Please type your response below.",
+            ),
+          );
+        }
+      } else {
+        setError(err);
+      }
       setState("idle");
     }
   };
@@ -506,6 +602,8 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 recordingSeconds={recordingSeconds}
                 maxAudioSeconds={maxAudioSeconds}
                 isMicDenied={isMicDenied}
+                isServerSttUnavailable={isServerSttUnavailable}
+                isBrowserSpeechSupported={isSpeechRecognitionSupported()}
                 onMuteSpeaker={handleMuteSpeaker}
               />
             </div>
@@ -514,6 +612,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
           {/* Typed Fallback Input */}
           <TypedInputFallback
             isMicDenied={isMicDenied}
+            isServerSttUnavailable={isServerSttUnavailable}
             onMicDeniedChange={setIsMicDenied}
             isDisabled={
               state === "transcribing" ||

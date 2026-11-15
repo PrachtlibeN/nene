@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import { SessionView } from "./SessionView";
@@ -285,5 +286,77 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
     fireEvent.click(viewFeedbackBtn);
 
     expect(handleViewFeedback).toHaveBeenCalledWith(sessionExample.id);
+  });
+
+  it("automatically uses Web Speech API when server STT is unavailable", async () => {
+    server.use(
+      http.get("*/api/v1/speech/status", () => {
+        return HttpResponse.json({
+          stt: { status: "unavailable" },
+          tts: { mode: "browser", server_side: false },
+          limits: { max_audio_seconds: 120 },
+        });
+      }),
+    );
+
+    const active = {
+      lang: "en-US",
+      onstart: null as (() => void) | null,
+      onresult: null as
+        | ((e: { results: Array<Array<{ transcript: string }>> }) => void)
+        | null,
+      start: vi.fn(),
+      stop: vi.fn(),
+      abort: vi.fn(),
+    };
+
+    class MockSpeechRecognition {
+      constructor() {
+        return active;
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", MockSpeechRecognition);
+
+    render(
+      <SessionView
+        initialSession={sessionExample}
+        scenario={scenarioExample}
+        initialTurn={null}
+        onViewFeedback={vi.fn()}
+      />,
+    );
+
+    // Wait for getSpeechStatus to resolve
+    await waitFor(() => {
+      expect(screen.getByText(/Browser Speech/i)).toBeInTheDocument();
+    });
+
+    const pttButton = screen.getByRole("button", { name: /push to talk/i });
+    fireEvent.pointerDown(pttButton);
+
+    expect(active.start).toHaveBeenCalled();
+
+    // Simulate speech recognition returning transcript
+    act(() => {
+      active.onresult?.({
+        results: [[{ transcript: "I optimized our cloud database query times." }]],
+      });
+    });
+
+    // Release button to finish speaking
+    fireEvent.pointerUp(pttButton);
+
+    // Verifies review stage is reached using browser speech
+    await waitFor(() => {
+      expect(
+        screen.getByText(/review your spoken response \(no auto-send\)/i),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByDisplayValue("I optimized our cloud database query times."),
+    ).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
   });
 });
