@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  cleanSpeakerTag,
   createSpeechRecognitionController,
   createSpeechSynthesisController,
   stopAllSpeech,
@@ -53,6 +54,36 @@ describe("SpeechSynthesisController", () => {
 
     utterances[1]?.onend?.(new Event("end") as SpeechSynthesisEvent);
     expect(onEnd).toHaveBeenCalledOnce();
+  });
+});
+
+describe("cleanSpeakerTag", () => {
+  it("strips bracketed speaker tags, persona titles, and colons", () => {
+    expect(
+      cleanSpeakerTag(
+        "[Sarah - People Partner]: I hear you're a club manager, but your answer didn't show.",
+      ),
+    ).toBe("I hear you're a club manager, but your answer didn't show.");
+
+    expect(
+      cleanSpeakerTag("[sarah-people partner] I hear you're a club manager."),
+    ).toBe("I hear you're a club manager.");
+
+    expect(
+      cleanSpeakerTag("[Alex - Engineering Manager]: Your response is very brief."),
+    ).toBe("Your response is very brief.");
+
+    expect(cleanSpeakerTag("Sarah: What was the measurable outcome?")).toBe(
+      "What was the measurable outcome?",
+    );
+
+    expect(
+      cleanSpeakerTag("Alex - Engineering Manager: How did you prioritize?"),
+    ).toBe("How did you prioritize?");
+
+    expect(cleanSpeakerTag("Regular dialogue without prefix.")).toBe(
+      "Regular dialogue without prefix.",
+    );
   });
 });
 

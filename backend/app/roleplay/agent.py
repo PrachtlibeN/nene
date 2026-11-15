@@ -10,6 +10,44 @@ from app.roleplay.prompts import build_roleplay_prompt
 from app.schemas.contracts import ScenarioPanelPersona
 
 _END_MARKER = re.compile(r"\[END\]", re.IGNORECASE)
+_SPEAKER_BRACKET_RE = re.compile(
+    r"^\s*(?:\[(?!\s*END\b)[^\]\n]{2,80}\]|\([^\)\n]{2,80}\))\s*:?\s*",
+    re.IGNORECASE,
+)
+
+
+def _strip_speaker_prefix(
+    text: str,
+    persona: ScenarioPanelPersona | None = None,
+) -> str:
+    cleaned = text.strip()
+    while True:
+        match = _SPEAKER_BRACKET_RE.match(cleaned)
+        if match:
+            cleaned = cleaned[match.end():].strip()
+        else:
+            break
+
+    names_to_check: list[str] = [
+        "interviewer",
+        "interviewer 1",
+        "interviewer 2",
+        "panelist",
+    ]
+    if persona is not None:
+        if persona.name:
+            names_to_check.append(persona.name)
+            if persona.role_title:
+                names_to_check.append(f"{persona.name} - {persona.role_title}")
+                names_to_check.append(f"{persona.name}, {persona.role_title}")
+                names_to_check.append(persona.role_title)
+
+    for name in names_to_check:
+        escaped = re.escape(name)
+        pattern = re.compile(rf"^\s*{escaped}\s*:\s*", re.IGNORECASE)
+        cleaned = pattern.sub("", cleaned).strip()
+
+    return cleaned
 
 
 class RoleplayAgent:
@@ -143,6 +181,7 @@ class RoleplayAgent:
     ) -> RoleplayReply:
         should_end = _END_MARKER.search(content) is not None
         text = " ".join(_END_MARKER.sub(" ", content).split())
+        text = _strip_speaker_prefix(text, persona)
         text = " ".join(text.split()[:60])
         if not text:
             raise AppError(

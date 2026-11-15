@@ -19,6 +19,29 @@ export interface SpeechSequenceItem {
   voiceGender?: "male" | "female";
 }
 
+/**
+ * Strips leading bracketed or named speaker tags such as "[Sarah - People Partner]: "
+ * from dialogue text so it doesn't display or get spoken aloud by TTS.
+ */
+export function cleanSpeakerTag(text: string): string {
+  if (!text) return "";
+  let cleaned = text.trim();
+  while (cleaned) {
+    const next = cleaned.replace(
+      /^\s*(?:\[(?!\s*END\b)[^\]\n]{2,80}\]|\([^)\n]{2,80}\))\s*:?\s*/i,
+      "",
+    );
+    if (next === cleaned) break;
+    cleaned = next.trim();
+  }
+  // Strip unbracketed persona/interviewer prefixes like "Sarah - People Partner:" or "Sarah:"
+  cleaned = cleaned.replace(
+    /^(?:alex|sarah|morgan|interviewer|people partner|engineering manager)(?:\s*-\s*[A-Za-z0-9 _.-]+)?\s*:\s*/i,
+    "",
+  );
+  return cleaned.trim();
+}
+
 export interface BrowserSpeechRecognitionEvent {
   results: {
     length?: number;

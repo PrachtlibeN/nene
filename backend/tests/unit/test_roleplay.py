@@ -207,3 +207,40 @@ def test_panel_even_candidate_turns_alternate_single_speaker() -> None:
     assert not isinstance(fourth_turn, list)
     assert second_turn.speaker_id == "alex"
     assert fourth_turn.speaker_id == "sarah"
+
+
+def test_reply_strips_bracketed_and_named_speaker_prefixes() -> None:
+    settings = Settings(OLLAMA_MODEL="test-model")
+    llm = FakeLLMClient(
+        settings,
+        replies=[
+            (
+                "[Sarah - People Partner]: I hear you're a club manager, "
+                "but your answer didn't show the decision-making process."
+            ),
+            "Alex: How did you measure impact?",
+            "[sarah-people partner] Can you give more details?",
+        ],
+    )
+    agent = RoleplayAgent(llm, settings)
+
+    reply1 = agent.respond(
+        make_context(scenario=make_panel_scenario(), turn_index=4),
+        "Candidate response",
+    )
+    reply2 = agent.respond(
+        make_context(scenario=make_panel_scenario(), turn_index=2),
+        "Candidate response",
+    )
+    reply3 = agent.respond(
+        make_context(scenario=make_panel_scenario(), turn_index=4),
+        "Candidate response",
+    )
+
+    assert not isinstance(reply1, list)
+    assert not isinstance(reply2, list)
+    assert not isinstance(reply3, list)
+    assert reply1.text.startswith("I hear you're a club manager")
+    assert not reply1.text.startswith("[Sarah")
+    assert reply2.text == "How did you measure impact?"
+    assert reply3.text == "Can you give more details?"

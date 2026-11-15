@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import type { ScenarioOut, TurnOut } from "../../api/client";
+import { cleanSpeakerTag } from "../../utils/speech";
 
 interface TurnListProps {
   turns: TurnOut[];
@@ -83,7 +84,9 @@ export const TurnList: React.FC<TurnListProps> = ({
                   : "bg-indigo-600 text-white rounded-tr-sm"
               }`}
             >
-              <p className="whitespace-pre-wrap leading-relaxed">{turn.text}</p>
+              <p className="whitespace-pre-wrap leading-relaxed">
+                {cleanSpeakerTag(turn.text)}
+              </p>
 
               {/* Speech metadata badge */}
               {turn.speech_meta && (
@@ -109,7 +112,12 @@ export const TurnList: React.FC<TurnListProps> = ({
                 <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => onReplayTurn(turn.text, turn.speaker_id ?? undefined)}
+                    onClick={() =>
+                      onReplayTurn(
+                        cleanSpeakerTag(turn.text),
+                        turn.speaker_id ?? undefined,
+                      )
+                    }
                     aria-label="Replay speech"
                     className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium focus:outline-none"
                   >

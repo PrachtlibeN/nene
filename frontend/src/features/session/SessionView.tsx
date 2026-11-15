@@ -9,6 +9,7 @@ import {
 } from "../../api/client";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import {
+  cleanSpeakerTag,
   createSpeechRecognitionController,
   createSpeechSynthesisController,
   isSpeechRecognitionSupported,
@@ -421,7 +422,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       (panelPersona) => panelPersona.id === speakerId,
     );
     speechRef.current.speakSequence(
-      [{ text, voiceGender: persona?.voice_gender }],
+      [{ text: cleanSpeakerTag(text), voiceGender: persona?.voice_gender }],
       () => setState("idle"),
       () => setState("idle"),
     );
@@ -632,5 +633,5 @@ function speechItemForTurn(turn: TurnOut, scenario: ScenarioOut): SpeechSequence
   const persona = (scenario.definition.personas ?? []).find(
     (panelPersona) => panelPersona.id === turn.speaker_id,
   );
-  return { text: turn.text, voiceGender: persona?.voice_gender };
+  return { text: cleanSpeakerTag(turn.text), voiceGender: persona?.voice_gender };
 }
