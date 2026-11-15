@@ -411,23 +411,37 @@ export function createSpeechRecognitionController(
 // Global reference set to protect active SpeechSynthesisUtterance objects from Chromium V8 garbage collection
 const activeUtterances: Set<SpeechSynthesisUtterance> = new Set();
 
+let sharedAudioContext: AudioContext | null = null;
+
+export function getSharedAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (!sharedAudioContext) {
+    try {
+      const AudioCtxClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtxClass) {
+        sharedAudioContext = new AudioCtxClass();
+      }
+    } catch {
+      // AudioContext unavailable
+    }
+  }
+  return sharedAudioContext;
+}
+
 /**
  * Primes and unlocks browser audio and speech synthesis during user gesture.
- * Safari, Chrome and mobile browsers strictly require a user gesture (click/tap)
+ * Safari, Chrome, Edge and mobile browsers strictly require a user gesture (click/tap)
  * before allowing any audio or speech synthesis playback.
  */
-export function unlockSpeechAudio(): void {
+export function unlockSpeechAudio(primeUtterance = false): void {
   if (typeof window === "undefined") return;
 
   try {
-    const AudioCtxClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (AudioCtxClass) {
-      const ctx = new AudioCtxClass();
-      if (ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
-      }
+    const ctx = getSharedAudioContext();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
     }
   } catch {
     // ignore
@@ -437,6 +451,20 @@ export function unlockSpeechAudio(): void {
     if ("speechSynthesis" in window) {
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
+      }
+      // Prime WebKit / Safari iOS & Edge user-activation gesture token if not currently speaking
+      if (
+        primeUtterance &&
+        !window.speechSynthesis.speaking &&
+        typeof window.SpeechSynthesisUtterance !== "undefined"
+      ) {
+        const primer = new window.SpeechSynthesisUtterance(".");
+        primer.volume = 0.01;
+        primer.rate = 10;
+        activeUtterances.add(primer);
+        primer.onend = () => activeUtterances.delete(primer);
+        primer.onerror = () => activeUtterances.delete(primer);
+        window.speechSynthesis.speak(primer);
       }
     }
   } catch {
@@ -589,9 +617,11 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
 
     const targetPool = accentVoices.length > 0 ? accentVoices : pool;
 
-    // Prefer local voices (localService === true) to avoid silent failures with network cloud voices
-    const localPool = targetPool.filter((v) => v.localService === true);
-    const candidatePool = localPool.length > 0 ? localPool : targetPool;
+    // Prioritize natural neural online voices (Edge) and verified local voices (Chrome/Safari)
+    const isHighQuality = (v: SpeechSynthesisVoice) =>
+      v.localService === true || /\b(natural|neural|online)\b/i.test(v.name);
+    const highQualityPool = targetPool.filter(isHighQuality);
+    const candidatePool = highQualityPool.length > 0 ? highQualityPool : targetPool;
 
     const maleHint =
       accentPrefix === "en-gb"
@@ -783,6 +813,14 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
           if (e.error === "canceled" || e.error === "interrupted") {
             finished = true;
             activeUtterances.delete(utterance);
+            return;
+          }
+          if (e.error === "not-allowed") {
+            finished = true;
+            activeUtterances.delete(utterance);
+            clearTimers();
+            console.warn("SpeechSynthesis playback blocked by browser media policy.");
+            onError?.();
             return;
           }
           // If voice failed due to network or synthesis failure, retry once with system default voice

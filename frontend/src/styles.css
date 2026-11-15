@@ -366,7 +366,7 @@ body {
   border-radius: 1.05rem;
   background: linear-gradient(135deg, rgba(200, 66, 59, 0.75), rgba(246, 231, 180, 0.65));
   opacity: 0;
-  pointer-events: none;
+  pointer-events: none !important;
   transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
   z-index: 0;
 }
@@ -379,7 +379,7 @@ body {
   border-radius: 1rem;
   box-shadow: 0 14px 28px -6px rgba(43, 76, 126, 0.16), 0 8px 14px -4px rgba(200, 66, 59, 0.08);
   opacity: 0;
-  pointer-events: none;
+  pointer-events: none !important;
   transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
   z-index: -1;
 }
@@ -480,3 +480,318 @@ body {
     transform: none !important;
   }
 }
+
+/* ==========================================================================
+   ULIS / VNU Language Academy Theme (Home / ScenariosView)
+   Primary: Blue (#0F3A73, #1C57A8, #3B82D6, #BFE0FA, #DCEBFB, #F2F8FF)
+   Accents: Sun Gold #FFC857, Sakura Pink #F8C8D8, Hanko Vermilion #D64545
+   Text: #14304F, #4A607A (Contrast >= 4.5:1)
+   ========================================================================== */
+
+.theme-ulis {
+  --blue-900: #0f3a73;
+  --blue-700: #1c57a8;
+  --blue-500: #3b82d6;
+  --blue-200: #bfe0fa;
+  --blue-100: #dcebfb;
+  --blue-50: #f2f8ff;
+  --text-primary: #14304f;
+  --text-secondary: #4a607a;
+  --sun: #ffc857;
+  --sakura: #f8c8d8;
+  --hanko: #d64545;
+  font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Meiryo", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text-primary);
+  background: linear-gradient(180deg, #f2f8ff 0%, #ffffff 420px, #f2f8ff 100%);
+  min-height: 100%;
+}
+
+/* Hero Ambient Floating Illustrations (Max 2 moving elements) */
+@keyframes decor-float-1 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -4px, 0);
+  }
+}
+
+@keyframes decor-float-2 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -4px, 0);
+  }
+}
+
+.animate-decor-float-1 {
+  animation: decor-float-1 6.5s ease-in-out infinite;
+}
+
+.animate-decor-float-2 {
+  animation: decor-float-2 7.8s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Nene Mascot - Animations & Behavior System (.nene- prefix)
+   Transforms and Opacity only (GPU accelerated)
+   ========================================================================== */
+
+/* Natural Breathing */
+@keyframes nene-breathe {
+  0%, 100% {
+    transform: scale3d(1, 1, 1);
+  }
+  50% {
+    transform: scale3d(1.01, 1.025, 1);
+  }
+}
+
+.nene-breathing {
+  animation: nene-breathe 4s ease-in-out infinite;
+  transform-origin: 74px 130px;
+}
+
+/* Hop Keyframes */
+@keyframes nene-hop {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  30% {
+    transform: translate3d(0, -10px, 0);
+  }
+  60% {
+    transform: translate3d(0, 0, 0);
+  }
+  75% {
+    transform: translate3d(0, -5px, 0);
+  }
+  90% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Wing Flap / Wave Keyframes */
+@keyframes nene-wave-wing {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-32deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+  75% {
+    transform: rotate(-24deg);
+  }
+}
+
+@keyframes nene-wings-stretch-l {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-22deg) translate3d(-3px, -2px, 0);
+  }
+}
+
+@keyframes nene-wings-stretch-r {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(22deg) translate3d(3px, -2px, 0);
+  }
+}
+
+/* Head Movements */
+@keyframes nene-head-tilt-left {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-9deg) translate3d(-1px, 0, 0);
+  }
+}
+
+@keyframes nene-head-look-around {
+  0%, 100% {
+    transform: rotate(0deg) translate3d(0, 0, 0);
+  }
+  25% {
+    transform: rotate(-7deg) translate3d(-3px, 0, 0);
+  }
+  75% {
+    transform: rotate(7deg) translate3d(3px, 0, 0);
+  }
+}
+
+@keyframes nene-head-read {
+  0%, 100% {
+    transform: rotate(0deg) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: rotate(6deg) translate3d(0, 5px, 0);
+  }
+}
+
+@keyframes nene-head-nod {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  40% {
+    transform: translate3d(0, 4px, 0) rotate(3deg);
+  }
+  70% {
+    transform: translate3d(0, -1px, 0) rotate(-1deg);
+  }
+}
+
+@keyframes nene-foot-tap {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-8deg) translate3d(0, -2px, 0);
+  }
+}
+
+@keyframes nene-emoji-fade-up {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0) scale(0.85);
+  }
+  20% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate3d(0, -4px, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0) scale(0.9);
+  }
+}
+
+/* Nene Data Activity Triggers */
+.nene-container[data-activity="small_hop"] .nene-svg,
+.nene-container[data-activity="clicked"] .nene-svg,
+.nene-container[data-activity="wake_up"] .nene-svg {
+  animation: nene-hop 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.nene-container[data-activity="wave_hello"] .nene-wing-r {
+  animation: nene-wave-wing 1.4s ease-in-out both;
+  transform-origin: 106px 90px;
+}
+
+.nene-container[data-activity="clicked"] .nene-wing-r,
+.nene-container[data-activity="clicked"] .nene-wing-l {
+  animation: nene-wave-wing 800ms ease-in-out both;
+}
+
+.nene-container[data-activity="stretch_wings"] .nene-wing-l {
+  animation: nene-wings-stretch-l 1.8s ease-in-out both;
+  transform-origin: 42px 90px;
+}
+
+.nene-container[data-activity="stretch_wings"] .nene-wing-r {
+  animation: nene-wings-stretch-r 1.8s ease-in-out both;
+  transform-origin: 106px 90px;
+}
+
+.nene-container[data-activity="tilt_head"] .nene-head {
+  animation: nene-head-tilt-left 2s ease-in-out both;
+  transform-origin: 74px 75px;
+}
+
+.nene-container[data-activity="look_around"] .nene-head {
+  animation: nene-head-look-around 2.4s ease-in-out both;
+  transform-origin: 74px 75px;
+}
+
+.nene-container[data-activity="read_book"] .nene-head {
+  animation: nene-head-read 2.8s ease-in-out both;
+  transform-origin: 74px 75px;
+}
+
+.nene-container[data-activity="nod_filter"] .nene-head {
+  animation: nene-head-nod 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: 74px 75px;
+}
+
+.nene-container[data-activity="tap_foot"] .nene-feet {
+  animation: nene-foot-tap 600ms ease-in-out 3;
+  transform-origin: 86px 134px;
+}
+
+/* Looking towards card columns */
+.nene-container[data-activity="look_card_left"] .nene-head {
+  transform: rotate(-8deg) translate3d(-3px, 0, 0);
+  transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nene-container[data-activity="look_card_center"] .nene-head {
+  transform: rotate(0deg) translate3d(0, 2px, 0);
+  transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nene-container[data-activity="look_card_right"] .nene-head {
+  transform: rotate(8deg) translate3d(3px, 0, 0);
+  transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Sleepy Activity */
+.nene-container[data-activity="sleepy"] .nene-head {
+  transform: rotate(4deg) translate3d(0, 3px, 0);
+  transition: transform 600ms ease-in-out;
+}
+
+/* Emoji Animations */
+.nene-emoji-heart,
+.nene-emoji-humming,
+.nene-emoji-excited,
+.nene-emoji-sleepy {
+  animation: nene-emoji-fade-up 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ULIS Theme Card Hover Styling */
+.theme-ulis .scenario-card-hover {
+  background-color: #ffffff;
+  border-color: #dcebfb;
+  border-width: 1.5px;
+  box-shadow: 0 4px 16px -2px rgba(15, 58, 115, 0.06);
+}
+
+.theme-ulis .scenario-card-hover::before {
+  background: linear-gradient(135deg, rgba(59, 130, 214, 0.65), rgba(255, 200, 87, 0.7));
+}
+
+.theme-ulis .scenario-card-hover::after {
+  box-shadow: 0 16px 32px -4px rgba(15, 58, 115, 0.14), 0 6px 12px -2px rgba(28, 87, 168, 0.08);
+}
+
+/* Reduced Motion Overrides for ULIS and Nene */
+@media (prefers-reduced-motion: reduce) {
+  .theme-ulis *,
+  .theme-ulis *::before,
+  .theme-ulis *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .nene-breathing,
+  .animate-decor-float-1,
+  .animate-decor-float-2,
+  .nene-emoji-heart,
+  .nene-emoji-humming,
+  .nene-emoji-excited,
+  .nene-emoji-sleepy {
+    animation: none !important;
+  }
+}
+

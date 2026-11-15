@@ -75,6 +75,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
   const [isMicDenied, setIsMicDenied] = useState<boolean>(false);
   const [isServerSttUnavailable, setIsServerSttUnavailable] = useState<boolean>(false);
+  const [isAudioAutoplayBlocked, setIsAudioAutoplayBlocked] = useState<boolean>(false);
   const [error, setError] = useState<unknown | null>(null);
 
   // Hidden by default: user opens typing mode via keyboard toggle icon button
@@ -204,10 +205,12 @@ export const SessionView: React.FC<SessionViewProps> = ({
         () => {
           setState("idle");
           setActiveSpeakingTurn(null);
+          setIsAudioAutoplayBlocked(false);
         },
         () => {
           setState("idle");
           setActiveSpeakingTurn(null);
+          setIsAudioAutoplayBlocked(true);
         },
         (item) => {
           if (item.turn) {
@@ -220,6 +223,46 @@ export const SessionView: React.FC<SessionViewProps> = ({
       );
     }
   }, [openingTurns, scenario, accent]);
+
+  const handleUnblockAudio = () => {
+    setIsAudioAutoplayBlocked(false);
+    unlockSpeechAudio(true);
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+    } catch {
+      // ignore
+    }
+
+    const openingInterviewerTurns = openingTurns.filter(
+      (turn) => turn.speaker === "interviewer",
+    );
+    if (openingInterviewerTurns.length > 0) {
+      setState("speaking");
+      setActiveSpeakingTurn(openingInterviewerTurns[0]);
+      speechRef.current.speakSequence(
+        openingInterviewerTurns.map((turn) => speechItemForTurn(turn, scenario)),
+        () => {
+          setState("idle");
+          setActiveSpeakingTurn(null);
+          setIsAudioAutoplayBlocked(false);
+        },
+        () => {
+          setState("idle");
+          setActiveSpeakingTurn(null);
+          setIsAudioAutoplayBlocked(true);
+        },
+        (item) => {
+          if (item.turn) {
+            setActiveSpeakingTurn(item.turn);
+            const turnKey = item.turn.id || `${item.turn.idx}-${item.turn.speaker}-${item.turn.text.slice(0, 25)}`;
+            spokenTurnIdsRef.current.add(turnKey);
+          }
+        },
+        accent,
+      );
+    }
+  };
 
   // Audio reactor hook for dynamic Lip-sync and Hamon waves
   const activeSpeakerId = useMemo(() => {
@@ -495,6 +538,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       cancelSpeech();
       speechRef.current.stop();
     }
+    unlockSpeechAudio(true);
     setActiveSpeakingTurn(null);
     setState("sending");
     setError(null);
@@ -604,7 +648,8 @@ export const SessionView: React.FC<SessionViewProps> = ({
   };
 
   const handleReplayTurn = (text: string, speakerId?: string) => {
-    unlockSpeechAudio();
+    unlockSpeechAudio(true);
+    setIsAudioAutoplayBlocked(false);
     setState("speaking");
     const persona = (scenario.definition.personas ?? []).find(
       (panelPersona) => panelPersona.id === speakerId,
@@ -639,7 +684,8 @@ export const SessionView: React.FC<SessionViewProps> = ({
   };
 
   const handleTestVoice = () => {
-    unlockSpeechAudio();
+    unlockSpeechAudio(true);
+    setIsAudioAutoplayBlocked(false);
     setState("speaking");
     speechRef.current.speak(
       `Hello! This is a voice test from ${personas.length === 2 ? `${personas[0]?.name} and ${personas[1]?.name}` : "your interview panel"}.`,
@@ -791,6 +837,40 @@ export const SessionView: React.FC<SessionViewProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Audio Autoplay Unblock Banner for Edge & Mobile browsers */}
+      {isAudioAutoplayBlocked && (
+        <aside
+          role="alert"
+          aria-live="polite"
+          onClick={handleUnblockAudio}
+          className="mx-auto max-w-5xl w-full cursor-pointer rounded-2xl border-2 border-yamabuki-400 bg-yamabuki-50/95 p-3.5 sm:p-4 text-sumi-900 shadow-md transition-all hover:bg-yamabuki-100 active:scale-98"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-2xl animate-pulse shrink-0">🔊</span>
+              <div className="text-left min-w-0">
+                <p className="text-xs sm:text-sm font-bold text-sumi-900 truncate">
+                  Audio paused by browser media policy
+                </p>
+                <p className="text-[11px] sm:text-xs text-sumi-700">
+                  Tap anywhere on this bar to listen to your interview panel intro.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleUnblockAudio();
+              }}
+              className="shrink-0 rounded-xl bg-ai-700 px-4 py-2 text-xs sm:text-sm font-bold text-white shadow hover:bg-ai-800 transition-colors cursor-pointer"
+            >
+              Play Audio ▶
+            </button>
+          </div>
+        </aside>
       )}
 
       {/* Sân Khấu 2 Nhân Vật Chiếm ~75–80% Màn Hình */}

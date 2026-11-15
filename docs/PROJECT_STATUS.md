@@ -21,7 +21,9 @@ EchoRole là ứng dụng luyện phỏng vấn và giao tiếp theo kịch bả
 | **Nhập văn bản** | Floating Modal Overlay gõ phản hồi có autofocus, nút đóng ✕ và Send; tính toán thời lượng nói ước tính (~135 WPM) thay vì 0s hay 1s |
 | **Đánh giá (Coach)** | 6 tiêu chí chuẩn hóa (song ngữ Anh - Việt); an toàn trích xuất JSON bóc markdown; Fallback Evaluation cho phiên ngắn; ẩn sạch mã ID `trn_...` |
 | **Xử lý mạng & tải** | Tự động Retry với Exponential Backoff khi gặp HTTP 429 Rate Limit hoặc timeout ở cả luồng Chat & Evaluation |
-| **Kiểm thử & Build** | **114/114 pytest pass 100%**, Ruff check 0 lỗi, Mypy 41 files pass; **90/90 vitest pass 100%** trên 10/10 test suites; `npm run build` thành công |
+| **Kiểm thử & Build** | **114/114 pytest pass 100%**, Ruff check 0 lỗi, Mypy pass; **104/104 vitest pass 100%** trên 12/12 test suites; `npm run build` thành công |
+| **Edge & Mobile Audio** | Giải quyết triệt để rào cản Media Autoplay Policy: Banner "Play Audio" tương tác trực tiếp khi trình duyệt chặn phát tự động, cơ chế priming gesture đồng bộ, tối ưu voice natural neural (Edge) & local service (Chrome/Safari) |
+| **Mobile Session Start** | Khắc phục lỗi mobile không vào được hội thoại: Card spinner + disable state khi bắt đầu, status pill cố định, xử lý song song `Promise.all` giảm 50% độ trễ mạng, `pointer-events: none !important` trên gradient border |
 
 ---
 
