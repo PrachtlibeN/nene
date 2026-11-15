@@ -42,11 +42,22 @@ export const ScenarioCard: React.FC<ScenarioCardProps> = ({
   };
 
   return (
-    <div className="group relative flex flex-col justify-between rounded-2xl border-2 border-washi-300 bg-washi-50 p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-ai-500 hover:shadow-xl hover:bg-white overflow-hidden">
+    <div className="scenario-card-hover group relative flex flex-col justify-between rounded-2xl border-2 border-washi-300 bg-washi-50 p-5 shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-ai-600 focus-within:ring-offset-2">
       <div>
         {/* Scenario Vector Thumbnail Header */}
         <div className="relative w-full h-32 rounded-xl overflow-hidden mb-4 border border-washi-300 bg-washi-200/50">
-          <ScenarioThumbnail slug={scenario.slug} />
+          <div className="scenario-icon-waving w-full h-full">
+            <ScenarioThumbnail slug={scenario.slug} />
+          </div>
+          {/* Subtle Corner Sakura Petal appearing on hover */}
+          <div
+            aria-hidden="true"
+            className="scenario-corner-petal absolute top-2 right-2 z-20 pointer-events-none"
+          >
+            <svg viewBox="0 0 20 14" className="w-4 h-4 fill-[#F7C9D4] drop-shadow-2xs">
+              <path d="M 0 7 C 3 1, 10 0, 16 3 C 20 5, 20 9, 16 11 C 10 14, 3 13, 0 7 Z" />
+            </svg>
+          </div>
           {/* Floating Pill on Thumbnail */}
           <div className="absolute bottom-2 left-2 z-10">
             {difficultyBadge(scenario.difficulty)}

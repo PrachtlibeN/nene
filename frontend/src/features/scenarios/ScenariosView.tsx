@@ -134,16 +134,21 @@ export const ScenariosView: React.FC<ScenariosViewProps> = ({
         />
       ) : (
         <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-          {scenarios.map((scenario) => (
-            <ScenarioCard
+          {scenarios.map((scenario, index) => (
+            <div
               key={scenario.id}
-              scenario={scenario}
-              onSelect={handleSelectScenario}
-              onQuickStart={(id) => {
-                const s = scenarios.find((item) => item.id === id);
-                if (s) handleStartSession(s);
-              }}
-            />
+              className="animate-card-stagger flex flex-col h-full"
+              style={{ "--stagger-index": index } as React.CSSProperties}
+            >
+              <ScenarioCard
+                scenario={scenario}
+                onSelect={handleSelectScenario}
+                onQuickStart={(id) => {
+                  const s = scenarios.find((item) => item.id === id);
+                  if (s) handleStartSession(s);
+                }}
+              />
+            </div>
           ))}
           {scenarios.length === 0 && (
             <p className="col-span-full py-12 text-center text-sm text-sumi-500">

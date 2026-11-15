@@ -136,3 +136,341 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #9ba5ae;
 }
+
+/* ==========================================================================
+   EchoRole Japanese Visual Novel & Washi Stage Aesthetics & Motion System
+   Design Principles: "Subtle rather than noisy", GPU-accelerated (transform/opacity only)
+   ========================================================================== */
+
+:root {
+  --color-shu-red: #c8423b;
+  --color-cream-gold: #f6e7b4;
+  --color-sakura-pink: #f7c9d4;
+  --color-sky-light: #cfe6f2;
+  --color-fuji-indigo: #5a6b8c;
+  --color-mist-white: #ffffff;
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --- Stage Ambient Light Themes --- */
+.stage-theme-morning {
+  --sky-top: #cfe6f2;
+  --sky-mid: #f0f7fb;
+  --sky-bottom: #faf8f5;
+  --sun-fill: #e8635a;
+  --sun-halo: rgba(247, 201, 212, 0.35);
+  --fuji-mountain: #5a6b8c;
+  --fuji-snow: #ffffff;
+  --fuji-hills: #869abf;
+}
+
+.stage-theme-golden-hour {
+  --sky-top: #fbebd2;
+  --sky-mid: #fbd6b8;
+  --sky-bottom: #f8c0b0;
+  --sun-fill: #df5846;
+  --sun-halo: rgba(246, 231, 180, 0.45);
+  --fuji-mountain: #4d4368;
+  --fuji-snow: #fdf5eb;
+  --fuji-hills: #6e618e;
+}
+
+.stage-theme-gentle-day {
+  --sky-top: #d7e8f5;
+  --sky-mid: #eef5fa;
+  --sky-bottom: #faf8f5;
+  --sun-fill: #e47870;
+  --sun-halo: rgba(207, 230, 242, 0.4);
+  --fuji-mountain: #687e9d;
+  --fuji-snow: #ffffff;
+  --fuji-hills: #93a6be;
+}
+
+/* --- Sun Breathing (Opacity Only) --- */
+@keyframes sun-breathe {
+  0%, 100% {
+    opacity: 0.86;
+    transform: translateZ(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+}
+
+.animate-sun-breathe {
+  animation: sun-breathe 9s ease-in-out infinite;
+}
+
+/* --- Vector Cloud Drifting --- */
+@keyframes cloud-drift {
+  0% {
+    transform: translate3d(-20%, 0, 0);
+  }
+  100% {
+    transform: translate3d(120%, 0, 0);
+  }
+}
+
+.animate-cloud-1 {
+  animation: cloud-drift 44s linear infinite;
+  animation-delay: -12s;
+}
+
+.animate-cloud-2 {
+  animation: cloud-drift 53s linear infinite;
+  animation-delay: -28s;
+}
+
+.animate-cloud-3 {
+  animation: cloud-drift 60s linear infinite;
+  animation-delay: -4s;
+}
+
+/* --- Sakura Petals Fall (Diagonal Drifting with gentle rotation) --- */
+@keyframes sakura-fall {
+  0% {
+    transform: translate3d(0, -20px, 0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.45;
+  }
+  85% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translate3d(85px, 280px, 0) rotate(260deg);
+    opacity: 0;
+  }
+}
+
+.animate-sakura-petal {
+  animation: sakura-fall var(--sakura-duration, 14s) ease-in-out infinite;
+  animation-delay: var(--sakura-delay, 0s);
+  will-change: transform, opacity;
+}
+
+/* --- Natural Eye Blinking --- */
+@keyframes eye-blink-a {
+  0%, 89%, 95%, 100% {
+    transform: scaleY(1);
+  }
+  92% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes eye-blink-b {
+  0%, 91%, 97%, 100% {
+    transform: scaleY(1);
+  }
+  94% {
+    transform: scaleY(0.08);
+  }
+}
+
+.animate-blink-a {
+  animation: eye-blink-a 3.6s infinite ease-in-out;
+  animation-delay: -0.8s;
+}
+
+.animate-blink-b {
+  animation: eye-blink-b 4.4s infinite ease-in-out;
+  animation-delay: -2.3s;
+}
+
+/* --- Idle Breathing / Subtle Sway --- */
+@keyframes gentle-breath-a {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+@keyframes gentle-breath-b {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -1.8px, 0);
+  }
+}
+
+.animate-breath-a {
+  animation: gentle-breath-a 4.8s ease-in-out infinite;
+  animation-delay: -1.2s;
+}
+
+.animate-breath-b {
+  animation: gentle-breath-b 5.6s ease-in-out infinite;
+  animation-delay: -3.4s;
+}
+
+/* --- Gentle Nodding (Listening State) --- */
+@keyframes gentle-nod {
+  0%, 75%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  80% {
+    transform: translate3d(0, 2px, 0) rotate(1.2deg);
+  }
+  88% {
+    transform: translate3d(0, -0.5px, 0) rotate(-0.5deg);
+  }
+  94% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+}
+
+.animate-gentle-nod {
+  animation: gentle-nod 6.2s ease-in-out infinite;
+}
+
+/* --- Thinking State Soft Pulse --- */
+@keyframes thinking-dots {
+  0%, 100% {
+    opacity: 0.25;
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 0.75;
+    transform: translate3d(0, -1px, 0);
+  }
+}
+
+.animate-thinking-dots {
+  animation: thinking-dots 2.2s ease-in-out infinite;
+}
+
+/* --- Scenario Card Hover & Lift --- */
+.scenario-card-hover {
+  position: relative;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* Card Glow Gradient Border via ::before */
+.scenario-card-hover::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 1.05rem;
+  background: linear-gradient(135deg, rgba(200, 66, 59, 0.75), rgba(246, 231, 180, 0.65));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 0;
+}
+
+/* Card Smooth Shadow Layer via ::after */
+.scenario-card-hover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  box-shadow: 0 14px 28px -6px rgba(43, 76, 126, 0.16), 0 8px 14px -4px rgba(200, 66, 59, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: -1;
+}
+
+/* Hover & Focus-Visible interaction (only on hover-capable devices) */
+@media (hover: hover) {
+  .scenario-card-hover:hover,
+  .scenario-card-hover:focus-within {
+    transform: translate3d(0, -6px, 0);
+  }
+
+  .scenario-card-hover:hover::before,
+  .scenario-card-hover:focus-within::before {
+    opacity: 1;
+  }
+
+  .scenario-card-hover:hover::after,
+  .scenario-card-hover:focus-within::after {
+    opacity: 1;
+  }
+
+  .scenario-card-hover:hover .scenario-icon-waving,
+  .scenario-card-hover:focus-within .scenario-icon-waving {
+    transform: rotate(6deg) scale(1.06);
+  }
+
+  .scenario-card-hover:hover .scenario-corner-petal,
+  .scenario-card-hover:focus-within .scenario-corner-petal {
+    opacity: 0.95;
+    transform: translate3d(0, 0, 0) rotate(120deg);
+  }
+}
+
+/* Active touch state for non-hover/touch devices */
+.scenario-card-hover:active {
+  transform: translate3d(0, -2px, 0);
+}
+
+/* Icon tilt/wave */
+.scenario-icon-waving {
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* Corner Sakura Petal in Card */
+.scenario-corner-petal {
+  opacity: 0;
+  transform: translate3d(4px, -4px, 0) rotate(0deg);
+  transition: opacity 300ms ease, transform 6s linear;
+  pointer-events: none;
+}
+
+/* Staggered entrance animation for ScenariosView cards */
+@keyframes card-stagger-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-card-stagger {
+  animation: card-stagger-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--stagger-index, 0) * 75ms);
+}
+
+/* --- Accessibility: prefers-reduced-motion --- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-sun-breathe,
+  .animate-cloud-1,
+  .animate-cloud-2,
+  .animate-cloud-3,
+  .animate-sakura-petal,
+  .animate-blink-a,
+  .animate-blink-b,
+  .animate-breath-a,
+  .animate-breath-b,
+  .animate-gentle-nod,
+  .animate-thinking-dots,
+  .animate-card-stagger {
+    animation: none !important;
+  }
+
+  .scenario-card-hover:hover,
+  .scenario-card-hover:focus-within {
+    transform: none !important;
+  }
+}
