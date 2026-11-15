@@ -16,8 +16,9 @@ from app.llm.interfaces import LLMHealth, LLMMessage, LLMResult
 
 
 class OpenAICompatibleClient:
-    MAX_RATE_LIMIT_RETRIES = 2
-    MAX_RETRY_AFTER_SECONDS = 5.0
+    RATE_LIMIT_DELAYS = (2.0, 4.0, 6.0)
+    MAX_RATE_LIMIT_RETRIES = 3
+    MAX_RETRY_AFTER_SECONDS = 15.0
     MAX_CHAT_RETRIES = 3
     RETRY_DELAYS = (0.8, 1.5)
 
@@ -223,13 +224,17 @@ class OpenAICompatibleClient:
                     503,
                 ) from None
 
-            if response.status_code == 429:
+            if response.status_code == 429 or self._is_rate_limited(response):
                 if attempt < self.MAX_RATE_LIMIT_RETRIES:
-                    time.sleep(
-                        self._retry_after_seconds(
-                            response.headers.get("Retry-After")
+                    retry_header = response.headers.get("Retry-After")
+                    delay = self._retry_after_seconds(retry_header)
+                    if delay <= 0:
+                        delay = (
+                            self.RATE_LIMIT_DELAYS[attempt]
+                            if attempt < len(self.RATE_LIMIT_DELAYS)
+                            else self.RATE_LIMIT_DELAYS[-1]
                         )
-                    )
+                    time.sleep(delay)
                     continue
                 raise AppError(
                     ErrorCode.LLM_UNAVAILABLE,
@@ -276,6 +281,48 @@ class OpenAICompatibleClient:
             "OpenAI-compatible provider is unavailable.",
             503,
         )
+
+    @staticmethod
+    def _is_rate_limited(response: httpx.Response) -> bool:
+        if response.status_code == 429:
+            return True
+        try:
+            data = response.json()
+        except ValueError:
+            return False
+        if not isinstance(data, dict):
+            return False
+        error = data.get("error")
+        if isinstance(error, dict):
+            code = str(error.get("code") or "").lower()
+            msg = str(error.get("message") or "").lower()
+            if "rate" in code or "rate_limit" in code or "quota" in code:
+                return True
+            if any(
+                term in msg
+                for term in (
+                    "rate limit",
+                    "rate_limit",
+                    "too many requests",
+                    "quota exceeded",
+                    "tpm",
+                    "rpm",
+                )
+            ):
+                return True
+        elif isinstance(error, str):
+            err_lower = error.lower()
+            if any(
+                term in err_lower
+                for term in (
+                    "rate limit",
+                    "rate_limit",
+                    "too many requests",
+                    "quota exceeded",
+                )
+            ):
+                return True
+        return False
 
     @staticmethod
     def _is_model_not_found(response: httpx.Response) -> bool:

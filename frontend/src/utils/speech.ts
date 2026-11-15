@@ -48,11 +48,15 @@ export function cleanSpeakerTag(text: string): string {
 }
 
 export interface BrowserSpeechRecognitionEvent {
+  resultIndex?: number;
   results: {
     length?: number;
     [index: number]: {
+      isFinal?: boolean;
+      length?: number;
       [index: number]: {
         transcript: string;
+        confidence?: number;
       };
     };
   };
@@ -82,6 +86,10 @@ export interface SpeechRecognitionCallbacks {
   onEnd?: () => void;
   onResult?: (transcript: string) => void;
   /**
+   * Called with interim (in-progress) transcript updates as the user speaks.
+   */
+  onInterimTranscript?: (interim: string) => void;
+  /**
    * Called when speech recognition encounters an error.
    * isPermanentDenied is true only for 'not-allowed' or 'service-not-allowed'.
    */
@@ -90,7 +98,7 @@ export interface SpeechRecognitionCallbacks {
 
 export interface SpeechRecognitionController {
   start: () => void;
-  stop: () => void;
+  stop: (options?: { immediate?: boolean }) => void;
   abort: () => void;
   isListening: () => boolean;
   isStarting: () => boolean;
@@ -110,6 +118,34 @@ export function getSpeechRecognitionClass(): (new () => BrowserSpeechRecognition
 
 export function isSpeechRecognitionSupported(): boolean {
   return getSpeechRecognitionClass() !== null;
+}
+
+/**
+ * Returns the first supported audio recording MIME type for MediaRecorder.
+ * Supports webm (Chrome/Edge/Firefox) and mp4/aac (iOS Safari/macOS Safari).
+ */
+export function getSupportedAudioMimeType(): string {
+  if (
+    typeof window === "undefined" ||
+    typeof MediaRecorder === "undefined" ||
+    typeof MediaRecorder.isTypeSupported !== "function"
+  ) {
+    return "";
+  }
+  const preferred = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/aac",
+    "audio/ogg;codecs=opus",
+    "audio/wav",
+  ];
+  for (const candidate of preferred) {
+    if (MediaRecorder.isTypeSupported(candidate)) {
+      return candidate;
+    }
+  }
+  return "";
 }
 
 export function abortActiveSpeechRecognition(): void {
@@ -146,9 +182,18 @@ export function createSpeechRecognitionController(
 ): SpeechRecognitionController {
   let isStarting = false;
   let isListening = false;
+  let stopTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let currentInstance: BrowserSpeechRecognitionInstance | null = null;
 
+  const clearPendingStop = (): void => {
+    if (stopTimeoutId) {
+      clearTimeout(stopTimeoutId);
+      stopTimeoutId = null;
+    }
+  };
+
   const initInstance = (): BrowserSpeechRecognitionInstance => {
+    clearPendingStop();
     if (activeRecognitionInstance) {
       try {
         activeRecognitionInstance.abort();
@@ -165,7 +210,7 @@ export function createSpeechRecognitionController(
 
     const recognition = new SpeechRecognitionClass();
     recognition.lang = "en-US";
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognition.continuous = true;
 
@@ -176,6 +221,7 @@ export function createSpeechRecognitionController(
     };
 
     recognition.onend = () => {
+      clearPendingStop();
       isStarting = false;
       isListening = false;
       if (activeRecognitionInstance === recognition) {
@@ -185,6 +231,7 @@ export function createSpeechRecognitionController(
     };
 
     recognition.onerror = (event: BrowserSpeechRecognitionErrorEvent) => {
+      clearPendingStop();
       isStarting = false;
       isListening = false;
       if (activeRecognitionInstance === recognition) {
@@ -196,21 +243,32 @@ export function createSpeechRecognitionController(
     };
 
     recognition.onresult = (event: BrowserSpeechRecognitionEvent) => {
-      let fullTranscript = "";
+      let finalTranscript = "";
+      let interimTranscript = "";
+
       if (event && event.results) {
         const len = typeof event.results.length === "number" ? event.results.length : 1;
         for (let i = 0; i < len; i++) {
-          const item = event.results[i]?.[0]?.transcript;
-          if (item) {
-            fullTranscript += (fullTranscript ? " " : "") + item.trim();
+          const item = event.results[i];
+          const text = item?.[0]?.transcript?.trim();
+          if (!text) continue;
+          if (item.isFinal === false) {
+            interimTranscript += (interimTranscript ? " " : "") + text;
+          } else {
+            finalTranscript += (finalTranscript ? " " : "") + text;
           }
         }
       }
-      if (!fullTranscript && event?.results?.[0]?.[0]?.transcript) {
-        fullTranscript = event.results[0][0].transcript;
+
+      if (!finalTranscript && !interimTranscript && event?.results?.[0]?.[0]?.transcript) {
+        finalTranscript = event.results[0][0].transcript.trim();
       }
-      if (fullTranscript) {
-        callbacks.onResult?.(fullTranscript);
+
+      callbacks.onInterimTranscript?.(interimTranscript);
+
+      const combined = [finalTranscript, interimTranscript].filter(Boolean).join(" ").trim();
+      if (combined) {
+        callbacks.onResult?.(combined);
       }
     };
 
@@ -260,18 +318,31 @@ export function createSpeechRecognitionController(
     }
   };
 
-  const stop = (): void => {
+  const stop = (options?: { immediate?: boolean }): void => {
     isStarting = false;
-    if (currentInstance) {
-      try {
-        currentInstance.stop();
-      } catch {
-        // ignore errors on stop
+    clearPendingStop();
+
+    const doStop = () => {
+      clearPendingStop();
+      if (currentInstance) {
+        try {
+          currentInstance.stop();
+        } catch {
+          // ignore errors on stop
+        }
       }
+    };
+
+    if (options?.immediate) {
+      doStop();
+    } else {
+      // 400ms flush buffer to capture trailing syllables before closing recognition
+      stopTimeoutId = setTimeout(doStop, 400);
     }
   };
 
   const abort = (): void => {
+    clearPendingStop();
     isStarting = false;
     isListening = false;
     if (currentInstance) {

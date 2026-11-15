@@ -12,6 +12,7 @@ interface RoleplayStageProps {
   state: PushToTalkState;
   volume: number;
   onReplayTurn: (text: string, speakerId?: string) => void;
+  interimTranscript?: string;
 }
 
 export const RoleplayStage: React.FC<RoleplayStageProps> = ({
@@ -21,6 +22,7 @@ export const RoleplayStage: React.FC<RoleplayStageProps> = ({
   state,
   volume,
   onReplayTurn,
+  interimTranscript = "",
 }) => {
   const personas = useMemo(() => {
     if (scenario.definition.personas && scenario.definition.personas.length > 0) {
@@ -92,7 +94,29 @@ export const RoleplayStage: React.FC<RoleplayStageProps> = ({
       {/* Minimalist Subtitle Box at Feet of Characters */}
       <div className="relative z-20 px-3 pb-3 sm:px-5 sm:pb-4 w-full">
         <div className="max-w-2xl mx-auto rounded-xl border border-washi-300 bg-white/95 backdrop-blur-md p-3 sm:p-3.5 shadow-md">
-          {displayedTurn ? (
+          {isUserSpeaking ? (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between border-b border-washi-200 pb-1">
+                <span className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-shu-700">
+                  <span className="h-2 w-2 rounded-full bg-shu-600 animate-ping inline-block" />
+                  You (Speaking...)
+                </span>
+                <span className="text-[10px] font-semibold text-sumi-400">Live Transcript</span>
+              </div>
+              <div className="max-h-24 sm:max-h-28 overflow-y-auto pr-1">
+                {interimTranscript ? (
+                  <p className="text-xs sm:text-sm md:text-base font-medium text-ai-800 italic leading-relaxed">
+                    &ldquo;{interimTranscript}&rdquo;
+                    <span className="inline-block w-1.5 h-3.5 ml-1 bg-ai-600 animate-pulse align-middle" />
+                  </p>
+                ) : (
+                  <p className="text-xs sm:text-sm md:text-base text-sumi-500 italic leading-relaxed">
+                    Listening to your voice... Speak your response clearly.
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : displayedTurn ? (
             <div className="space-y-1">
               <div className="flex items-center justify-between border-b border-washi-200 pb-1">
                 <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ai-700">

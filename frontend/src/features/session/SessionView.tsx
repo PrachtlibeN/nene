@@ -13,6 +13,7 @@ import {
   cleanSpeakerTag,
   createSpeechRecognitionController,
   createSpeechSynthesisController,
+  getSupportedAudioMimeType,
   isSpeechRecognitionSupported,
   stopAllSpeech,
   type SpeechRecognitionController,
@@ -69,6 +70,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
   const [reviewText, setReviewText] = useState<string>("");
   const [reviewSpeechMeta, setReviewSpeechMeta] = useState<SpeechMeta | null>(null);
+  const [interimTranscript, setInterimTranscript] = useState<string>("");
 
   const [isMicDenied, setIsMicDenied] = useState<boolean>(false);
   const [isServerSttUnavailable, setIsServerSttUnavailable] = useState<boolean>(false);
@@ -80,6 +82,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechRef = useRef(createSpeechSynthesisController());
   const spokenTurnIdsRef = useRef<Set<string>>(new Set());
   const webSpeechTranscriptRef = useRef<string>("");
@@ -107,6 +110,10 @@ export const SessionView: React.FC<SessionViewProps> = ({
       mounted = false;
       cancelSpeech();
       if (timerRef.current) clearInterval(timerRef.current);
+      if (stopFlushTimeoutRef.current) {
+        clearTimeout(stopFlushTimeoutRef.current);
+        stopFlushTimeoutRef.current = null;
+      }
       if (
         mediaRecorderRef.current &&
         mediaRecorderRef.current.state === "recording"
@@ -189,12 +196,16 @@ export const SessionView: React.FC<SessionViewProps> = ({
     // If server STT is unavailable and browser supports Web Speech API
     if (isServerSttUnavailable && isSpeechRecognitionSupported()) {
       webSpeechTranscriptRef.current = "";
+      setInterimTranscript("");
       if (!pttRecognitionControllerRef.current) {
         pttRecognitionControllerRef.current = createSpeechRecognitionController({
           onStart: () => {
             setState("recording");
             setRecordingSeconds(0);
             startTimer();
+          },
+          onInterimTranscript: (interim) => {
+            setInterimTranscript(interim);
           },
           onResult: (transcript) => {
             webSpeechTranscriptRef.current = transcript;
@@ -208,6 +219,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
               clearInterval(timerRef.current);
               timerRef.current = null;
             }
+            setInterimTranscript("");
             setState("idle");
           },
         });
@@ -245,11 +257,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
 
-      let mimeType = "audio/webm";
-      if (typeof MediaRecorder !== "undefined" && !MediaRecorder.isTypeSupported("audio/webm")) {
-        mimeType = "";
-      }
-
+      const mimeType = getSupportedAudioMimeType();
       const recorder = mimeType
         ? new MediaRecorder(stream, { mimeType })
         : new MediaRecorder(stream);
@@ -262,8 +270,9 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
       recorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
+        const blobType = recorder.mimeType || mimeType || "audio/webm";
         const audioBlob = new Blob(audioChunksRef.current, {
-          type: recorder.mimeType || "audio/webm",
+          type: blobType,
         });
         await processAudioTranscription(audioBlob);
       };
@@ -303,6 +312,10 @@ export const SessionView: React.FC<SessionViewProps> = ({
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    if (stopFlushTimeoutRef.current) {
+      clearTimeout(stopFlushTimeoutRef.current);
+      stopFlushTimeoutRef.current = null;
+    }
 
     if (onMockRecordAudio) {
       setState("transcribing");
@@ -318,22 +331,26 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
     if (isServerSttUnavailable && isSpeechRecognitionSupported()) {
       setState("transcribing");
-      pttRecognitionControllerRef.current?.stop();
-      setTimeout(() => {
-        const transcript = webSpeechTranscriptRef.current.trim();
-        if (transcript.length > 0) {
-          setReviewText(transcript);
-          setReviewSpeechMeta({
-            duration_ms: recordingSeconds * 1000,
-            word_count: transcript.split(/\s+/).length,
-            language: "en",
-            avg_confidence: 0.95,
-          });
-          setState("review");
-        } else {
-          setState("idle");
-        }
-      }, 300);
+      // 400ms buffer flush before stopping Web Speech recognition to capture final syllables
+      stopFlushTimeoutRef.current = setTimeout(() => {
+        pttRecognitionControllerRef.current?.stop({ immediate: true });
+        setTimeout(() => {
+          const transcript = webSpeechTranscriptRef.current.trim();
+          setInterimTranscript("");
+          if (transcript.length > 0) {
+            setReviewText(transcript);
+            setReviewSpeechMeta({
+              duration_ms: recordingSeconds * 1000,
+              word_count: transcript.split(/\s+/).length,
+              language: "en",
+              avg_confidence: 0.95,
+            });
+            setState("review");
+          } else {
+            setState("idle");
+          }
+        }, 150);
+      }, 400);
       return;
     }
 
@@ -342,7 +359,19 @@ export const SessionView: React.FC<SessionViewProps> = ({
       mediaRecorderRef.current.state === "recording"
     ) {
       setState("transcribing");
-      mediaRecorderRef.current.stop();
+      // 400ms buffer flush before stopping MediaRecorder to capture trailing speech
+      stopFlushTimeoutRef.current = setTimeout(() => {
+        if (
+          mediaRecorderRef.current &&
+          mediaRecorderRef.current.state === "recording"
+        ) {
+          try {
+            mediaRecorderRef.current.stop();
+          } catch {
+            // ignore error on stop
+          }
+        }
+      }, 400);
     } else {
       setState("idle");
     }
@@ -458,6 +487,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const handleDiscardReview = () => {
     setReviewText("");
     setReviewSpeechMeta(null);
+    setInterimTranscript("");
     setState("idle");
   };
 
@@ -636,6 +666,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
         state={state}
         volume={audioReactor.volume}
         onReplayTurn={handleReplayTurn}
+        interimTranscript={interimTranscript}
       />
 
       {/* Bottom Mobile-First Controls Area */}
@@ -695,6 +726,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 isBrowserSpeechSupported={isSpeechRecognitionSupported()}
                 onMuteSpeaker={handleMuteSpeaker}
                 volume={audioReactor.volume}
+                interimTranscript={interimTranscript}
               />
 
               {/* Small Keyboard Toggle Icon Button beside Mic */}

@@ -15,6 +15,7 @@ interface PushToTalkButtonProps {
   isBrowserSpeechSupported?: boolean;
   onMuteSpeaker?: () => void;
   volume?: number;
+  interimTranscript?: string;
 }
 
 export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
@@ -30,6 +31,7 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
   isBrowserSpeechSupported,
   onMuteSpeaker,
   volume = 0,
+  interimTranscript = "",
 }) => {
   const isRecording = state === "recording";
   const isMicLocked =
@@ -208,6 +210,11 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
               <span className="text-[11px] font-normal text-shu-700 mt-0.5">
                 {mode === "hold" ? "Release to transcribe" : "Click to stop & transcribe"}
               </span>
+              {interimTranscript ? (
+                <div className="mt-1.5 max-w-xs sm:max-w-md px-3 py-1 rounded-full bg-shu-50/90 border border-shu-200 text-[11px] sm:text-xs text-shu-800 italic truncate shadow-2xs animate-pulse">
+                  &ldquo;{interimTranscript}&rdquo;
+                </div>
+              ) : null}
             </div>
           ) : state === "waiting_reply" ? (
             <span className="font-semibold text-yamabuki-700 flex items-center gap-1.5">

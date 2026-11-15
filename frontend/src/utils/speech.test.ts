@@ -4,6 +4,7 @@ import {
   cleanSpeakerTag,
   createSpeechRecognitionController,
   createSpeechSynthesisController,
+  getSupportedAudioMimeType,
   stopAllSpeech,
   type BrowserSpeechRecognitionErrorEvent,
   type BrowserSpeechRecognitionEvent,
@@ -199,5 +200,101 @@ describe("SpeechRecognitionController & stopAllSpeech", () => {
     expect(controller.isListening()).toBe(false);
 
     vi.unstubAllGlobals();
+  });
+
+  it("enables continuous listening and interim results, streaming live updates", () => {
+    const target = new BaseMockRecognition();
+
+    class TestRecognition {
+      constructor() {
+        return target;
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", TestRecognition);
+
+    const onResult = vi.fn();
+    const onInterimTranscript = vi.fn();
+    const controller = createSpeechRecognitionController({ onResult, onInterimTranscript });
+    controller.start();
+
+    expect(target.continuous).toBe(true);
+    expect(target.interimResults).toBe(true);
+
+    // Interim speech chunk
+    target.onresult?.({
+      results: [
+        { isFinal: false, 0: { transcript: "I optimized" } },
+      ],
+    } as unknown as BrowserSpeechRecognitionEvent);
+
+    expect(onInterimTranscript).toHaveBeenLastCalledWith("I optimized");
+    expect(onResult).toHaveBeenLastCalledWith("I optimized");
+
+    // Final speech chunk + next interim chunk
+    target.onresult?.({
+      results: [
+        { isFinal: true, 0: { transcript: "I optimized" } },
+        { isFinal: false, 0: { transcript: "our database query latencies" } },
+      ],
+    } as unknown as BrowserSpeechRecognitionEvent);
+
+    expect(onInterimTranscript).toHaveBeenLastCalledWith("our database query latencies");
+    expect(onResult).toHaveBeenLastCalledWith("I optimized our database query latencies");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("applies 400ms flush buffer on stop unless immediate is specified", () => {
+    vi.useFakeTimers();
+    const target = new BaseMockRecognition();
+
+    class TestRecognition {
+      constructor() {
+        return target;
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", TestRecognition);
+
+    const controller = createSpeechRecognitionController({});
+    controller.start();
+
+    controller.stop();
+    expect(target.stop).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(399);
+    expect(target.stop).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(2);
+    expect(target.stop).toHaveBeenCalledTimes(1);
+
+    // Immediate stop
+    controller.start();
+    controller.stop({ immediate: true });
+    expect(target.stop).toHaveBeenCalledTimes(2);
+
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("getSupportedAudioMimeType", () => {
+  it("prioritizes webm and mp4 formats based on MediaRecorder support", () => {
+    const originalMediaRecorder = window.MediaRecorder;
+
+    // Simulate Safari supporting audio/mp4 but not webm
+    const mockIsTypeSupported = vi.fn((type: string) => type === "audio/mp4");
+    window.MediaRecorder = {
+      isTypeSupported: mockIsTypeSupported,
+    } as unknown as typeof MediaRecorder;
+
+    expect(getSupportedAudioMimeType()).toBe("audio/mp4");
+
+    // Simulate Chrome supporting webm opus
+    window.MediaRecorder.isTypeSupported = vi.fn((type: string) =>
+      type.includes("webm"),
+    );
+    expect(getSupportedAudioMimeType()).toBe("audio/webm;codecs=opus");
+
+    window.MediaRecorder = originalMediaRecorder;
   });
 });

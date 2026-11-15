@@ -178,7 +178,8 @@ def test_chat_distinguishes_provider_model_errors_from_endpoint_errors(
     client.close()
 
 
-def test_chat_maps_exhausted_rate_limit_retries() -> None:
+def test_chat_maps_exhausted_rate_limit_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.llm.client.time.sleep", lambda _: None)
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -194,6 +195,30 @@ def test_chat_maps_exhausted_rate_limit_retries() -> None:
     assert len(requests) == OpenAICompatibleClient.MAX_RATE_LIMIT_RETRIES + 1
     assert error.value.code is ErrorCode.LLM_UNAVAILABLE
     assert error.value.http_status == 503
+    client.close()
+
+
+def test_chat_retries_429_exponential_backoff_delays(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[httpx.Request] = []
+    delays: list[float] = []
+    monkeypatch.setattr("app.llm.client.time.sleep", delays.append)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if len(requests) <= 2:
+            return httpx.Response(429)
+        return chat_response()
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    llm = OpenAICompatibleClient(make_settings(), client)
+    result = llm.chat(
+        LLMProfile.EVALUATION,
+        [LLMMessage(role="user", content="Score")],
+    )
+
+    assert len(requests) == 3
+    assert delays == [2.0, 4.0]
+    assert result.content == "A useful response."
     client.close()
 
 
