@@ -131,36 +131,9 @@ export const SessionView: React.FC<SessionViewProps> = ({
     // Global gesture capture: keeps speech synthesis active across browser interaction
     const handleGesture = () => {
       unlockSpeechAudio();
-      // If browser autoplay policy blocked initial greeting on mount, play opening turns upon first user gesture
-      if (spokenTurnIdsRef.current.size === 0) {
-        const unplayed = openingTurnsRef.current.filter((turn) => turn.speaker === "interviewer");
-        if (unplayed.length > 0) {
-          setState("speaking");
-          setActiveSpeakingTurn(unplayed[0]);
-          speechRef.current.speakSequence(
-            unplayed.map((turn) => speechItemForTurn(turn, scenarioRef.current)),
-            () => {
-              setState("idle");
-              setActiveSpeakingTurn(null);
-            },
-            () => {
-              setState("idle");
-              setActiveSpeakingTurn(null);
-            },
-            (item) => {
-              if (item.turn) {
-                setActiveSpeakingTurn(item.turn);
-                const turnKey = item.turn.id || `${item.turn.idx}-${item.turn.speaker}-${item.turn.text.slice(0, 25)}`;
-                spokenTurnIdsRef.current.add(turnKey);
-              }
-            },
-            accentRef.current,
-          );
-        }
-      }
     };
-    window.addEventListener("click", handleGesture, { capture: true });
-    window.addEventListener("touchstart", handleGesture, { capture: true });
+    window.addEventListener("click", handleGesture);
+    window.addEventListener("touchstart", handleGesture);
 
     Promise.allSettled([api.getSpeechStatus(), api.getHealth()])
       .then(([speechResult, healthResult]) => {
@@ -191,8 +164,8 @@ export const SessionView: React.FC<SessionViewProps> = ({
     const speech = speechRef.current;
     return () => {
       mounted = false;
-      window.removeEventListener("click", handleGesture, { capture: true });
-      window.removeEventListener("touchstart", handleGesture, { capture: true });
+      window.removeEventListener("click", handleGesture);
+      window.removeEventListener("touchstart", handleGesture);
       cancelSpeech();
       if (timerRef.current) clearInterval(timerRef.current);
       if (stopFlushTimeoutRef.current) {
@@ -665,6 +638,23 @@ export const SessionView: React.FC<SessionViewProps> = ({
     );
   };
 
+  const handleTestVoice = () => {
+    unlockSpeechAudio();
+    setState("speaking");
+    speechRef.current.speak(
+      `Hello! This is a voice test from ${personas.length === 2 ? `${personas[0]?.name} and ${personas[1]?.name}` : "your interview panel"}.`,
+      () => {
+        setState("idle");
+        setActiveSpeakingTurn(null);
+      },
+      () => {
+        setState("idle");
+        setActiveSpeakingTurn(null);
+      },
+      accent,
+    );
+  };
+
   const handleEndSession = async () => {
     cancelSpeech();
     setError(null);
@@ -735,8 +725,17 @@ export const SessionView: React.FC<SessionViewProps> = ({
           </p>
         </div>
 
-        {/* Right: Accent Toggle & End Session or View Feedback */}
+        {/* Right: Accent Toggle, Test Voice & End Session */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={handleTestVoice}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-ai-200 bg-ai-50 text-ai-700 hover:bg-ai-100 focus:outline-none transition-colors shadow-2xs"
+            title="Test AI audio speech output"
+            aria-label="Test AI voice audio"
+          >
+            <span>🔊 Test Voice</span>
+          </button>
           <button
             type="button"
             onClick={handleToggleAccent}

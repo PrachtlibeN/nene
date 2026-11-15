@@ -49,9 +49,14 @@ export function cleanSpeakerTag(text: string): string {
   }
   // Strip unbracketed persona/interviewer prefixes like "Sarah - People Partner:" or "Sarah:"
   cleaned = cleaned.replace(
-    /^(?:alex|sarah|morgan|interviewer|people partner|engineering manager)(?:\s*-\s*[A-Za-z0-9 _.-]+)?\s*:\s*/i,
+    /^(?:alex|sarah|morgan|priya|nina|interviewer|people partner|engineering manager|customer operations director|customer success partner|chief operating officer|finance partner)(?:\s*-\s*[A-Za-z0-9 _.-]+)?\s*:\s*/i,
     "",
   );
+  // Strip LLM internal reasoning leakage if present
+  const quoteMatch = cleaned.match(/(?:say something like|respond with|ask|say):\s*["']([^"']{10,})["']/i);
+  if (quoteMatch && quoteMatch[1]) {
+    cleaned = quoteMatch[1].trim();
+  }
   return cleaned.trim();
 }
 
@@ -567,20 +572,26 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
   ): SpeechSynthesisVoice | undefined => {
     if (!isSupported() || !gender) return undefined;
     const voices = window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return undefined;
+
     const englishVoices = voices.filter((voice) =>
       voice.lang.toLowerCase().startsWith("en"),
     );
-    if (englishVoices.length === 0) return undefined;
+    const pool = englishVoices.length > 0 ? englishVoices : voices;
 
     const accentPrefix = accent.toLowerCase().startsWith("en-gb") ? "en-gb" : "en-us";
-    const accentVoices = englishVoices.filter(
+    const accentVoices = pool.filter(
       (v) =>
         v.lang.toLowerCase().replace("_", "-").startsWith(accentPrefix) ||
         (accentPrefix === "en-gb" && /\b(uk|british|gb)\b/i.test(v.name)) ||
         (accentPrefix === "en-us" && /\b(us|american)\b/i.test(v.name)),
     );
 
-    const pool = accentVoices.length > 0 ? accentVoices : englishVoices;
+    const targetPool = accentVoices.length > 0 ? accentVoices : pool;
+
+    // Prefer local voices (localService === true) to avoid silent failures with network cloud voices
+    const localPool = targetPool.filter((v) => v.localService === true);
+    const candidatePool = localPool.length > 0 ? localPool : targetPool;
 
     const maleHint =
       accentPrefix === "en-gb"
@@ -591,22 +602,26 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         ? /\b(kate|serena|hazel|victoria|susan|female|woman)\b/i
         : /\b(zira|samantha|aria|jenny|female|woman)\b/i;
 
-    const maleVoice = pool.find((voice) => maleHint.test(voice.name));
-    const femaleVoice = pool.find((voice) => femaleHint.test(voice.name));
+    const maleVoice =
+      candidatePool.find((voice) => maleHint.test(voice.name)) ??
+      targetPool.find((voice) => maleHint.test(voice.name));
+    const femaleVoice =
+      candidatePool.find((voice) => femaleHint.test(voice.name)) ??
+      targetPool.find((voice) => femaleHint.test(voice.name));
 
     if (gender === "male") {
       return (
         maleVoice ??
-        pool.find((voice) => voice !== femaleVoice) ??
-        englishVoices[0]
+        candidatePool.find((voice) => voice !== femaleVoice) ??
+        candidatePool[0]
       );
     }
 
     return (
       femaleVoice ??
-      pool.find((voice) => voice !== maleVoice) ??
-      englishVoices[1] ??
-      englishVoices[0]
+      candidatePool.find((voice) => voice !== maleVoice) ??
+      candidatePool[1] ??
+      candidatePool[0]
     );
   };
 
@@ -654,12 +669,27 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
 
       const chunks: FlattenedChunk[] = [];
       validItems.forEach((item, itemIdx) => {
-        chunks.push({
-          text: item.text.trim(),
-          item,
-          isFirstChunkOfItem: true,
-          itemIndex: itemIdx,
-        });
+        const cleaned = cleanSpeakerTag(item.text);
+        if (!cleaned) return;
+        // If turn is long (> 200 chars), split into sentences to keep utterances fast and prevent browser TTS stalls
+        if (cleaned.length > 200) {
+          const sentences = splitTextIntoSentences(cleaned);
+          sentences.forEach((sentence, sIdx) => {
+            chunks.push({
+              text: sentence,
+              item,
+              isFirstChunkOfItem: sIdx === 0,
+              itemIndex: itemIdx,
+            });
+          });
+        } else {
+          chunks.push({
+            text: cleaned,
+            item,
+            isFirstChunkOfItem: true,
+            itemIndex: itemIdx,
+          });
+        }
       });
 
       if (chunks.length === 0) {
@@ -701,8 +731,10 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         }
 
         const utterance = new window.SpeechSynthesisUtterance(currentChunk.text);
-        utterance.lang = accent;
+        utterance.lang = accent === "en-GB" ? "en-GB" : "en-US";
+        utterance.volume = 1.0;
         utterance.rate = 1.0;
+        utterance.pitch = 1.0;
         const voice = voiceForGender(currentChunk.item.voiceGender, accent);
         if (voice) utterance.voice = voice;
 
@@ -753,17 +785,24 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
             activeUtterances.delete(utterance);
             return;
           }
-          console.warn("SpeechSynthesis utterance error:", e);
+          // If voice failed due to network or synthesis failure, retry once with system default voice
+          if (utterance.voice && (e.error === "network" || e.error === "synthesis-failed" || e.error === "audio-busy")) {
+            console.warn("Retrying utterance with system default voice due to:", e.error);
+            utterance.voice = null;
+            try {
+              window.speechSynthesis.speak(utterance);
+              return;
+            } catch {
+              // ignore
+            }
+          }
+          console.warn("SpeechSynthesis utterance error:", e.error);
           handleDone();
         };
 
-        // Unpause if synthesis is paused
+        // Always unpause synthesis before speak
         try {
-          if (
-            typeof window !== "undefined" &&
-            window.speechSynthesis &&
-            window.speechSynthesis.paused
-          ) {
+          if (typeof window !== "undefined" && window.speechSynthesis) {
             window.speechSynthesis.resume();
           }
         } catch {
@@ -774,11 +813,7 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
 
         // Immediate unpause in case browser placed speak() into paused state
         try {
-          if (
-            typeof window !== "undefined" &&
-            window.speechSynthesis &&
-            window.speechSynthesis.paused
-          ) {
+          if (typeof window !== "undefined" && window.speechSynthesis) {
             window.speechSynthesis.resume();
           }
         } catch {
