@@ -3,8 +3,9 @@ import type { ScenarioOut, SessionOut, StartSessionOut, TurnOut } from "./api/cl
 import { ScenariosView } from "./features/scenarios/ScenariosView";
 import { SessionView } from "./features/session/SessionView";
 import { FeedbackView } from "./features/feedback/FeedbackView";
+import { HistoryView } from "./features/history/HistoryView";
 
-type ActiveTab = "scenarios" | "session" | "feedback";
+type ActiveTab = "scenarios" | "session" | "feedback" | "history";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("scenarios");
@@ -61,63 +62,56 @@ export default function App() {
               </div>
             </div>
 
-            {/* 3-Step Progress Stepper */}
-            <nav aria-label="Main Navigation" className="flex items-center gap-1 sm:gap-2">
+            {/* Minimalist 2-Button Navigation: Home & History */}
+            <nav aria-label="Main Navigation" className="flex items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
                 onClick={() => setActiveTab("scenarios")}
-                className={`relative inline-flex items-center gap-1.5 rounded-full px-2.5 sm:px-3 py-1 text-xs font-semibold transition-all ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-all ${
                   activeTab === "scenarios"
-                    ? "bg-ai-700 text-white shadow-sm ring-2 ring-ai-200"
-                    : "text-sumi-600 hover:bg-washi-200"
+                    ? "bg-ai-700 text-white shadow-xs ring-2 ring-ai-200"
+                    : "text-sumi-700 hover:bg-washi-200 hover:text-sumi-900"
                 }`}
               >
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    activeTab === "scenarios" ? "bg-white" : "bg-ai-500"
-                  }`}
-                />
-                <span>1. Scenarios</span>
+                <svg
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                  />
+                </svg>
+                <span>Home</span>
               </button>
-
-              <span className="text-washi-400 text-xs select-none">&bull;&mdash;&bull;</span>
 
               <button
                 type="button"
-                disabled={!currentSession || !currentScenario}
-                onClick={() => setActiveTab("session")}
-                className={`relative inline-flex items-center gap-1.5 rounded-full px-2.5 sm:px-3 py-1 text-xs font-semibold transition-all ${
-                  activeTab === "session"
-                    ? "bg-ai-700 text-white shadow-sm ring-2 ring-ai-200"
-                    : "text-sumi-600 hover:bg-washi-200 disabled:opacity-40 disabled:hover:bg-transparent"
+                onClick={() => setActiveTab("history")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-all ${
+                  activeTab === "history"
+                    ? "bg-ai-700 text-white shadow-xs ring-2 ring-ai-200"
+                    : "text-sumi-700 hover:bg-washi-200 hover:text-sumi-900"
                 }`}
               >
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    activeTab === "session" ? "bg-white" : "bg-ai-500"
-                  }`}
-                />
-                <span>2. Session</span>
-              </button>
-
-              <span className="text-washi-400 text-xs select-none">&bull;&mdash;&bull;</span>
-
-              <button
-                type="button"
-                disabled={!evaluationSessionId}
-                onClick={() => setActiveTab("feedback")}
-                className={`relative inline-flex items-center gap-1.5 rounded-full px-2.5 sm:px-3 py-1 text-xs font-semibold transition-all ${
-                  activeTab === "feedback"
-                    ? "bg-ai-700 text-white shadow-sm ring-2 ring-ai-200"
-                    : "text-sumi-600 hover:bg-washi-200 disabled:opacity-40 disabled:hover:bg-transparent"
-                }`}
-              >
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    activeTab === "feedback" ? "bg-white" : "bg-ai-500"
-                  }`}
-                />
-                <span>3. Feedback</span>
+                <svg
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span>History</span>
               </button>
             </nav>
           </div>
@@ -149,8 +143,13 @@ export default function App() {
         {activeTab === "feedback" && evaluationSessionId && (
           <FeedbackView
             sessionId={evaluationSessionId}
+            scenarioTitle={currentScenario?.title}
             onBackToScenarios={handleBackToScenarios}
           />
+        )}
+
+        {activeTab === "history" && (
+          <HistoryView onBackToHome={() => setActiveTab("scenarios")} />
         )}
       </main>
 

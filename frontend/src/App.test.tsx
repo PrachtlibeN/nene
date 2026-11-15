@@ -105,4 +105,28 @@ describe("EchoRole App Integration", () => {
       ).toBeInTheDocument();
     });
   });
+
+  it("navigates to History tab and back to Home using the header navigation", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /history/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /history/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /practice history & progress/i }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^home$/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Roleplay Practice Scenarios" }),
+      ).toBeInTheDocument();
+    });
+  });
 });

@@ -2,11 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type EvaluationOut } from "../../api/client";
 import { getErrorMessage } from "../../api/errors";
 import { ErrorAlert } from "../../components/ErrorAlert";
+import { saveSessionHistoryItem } from "../../utils/history";
 import { CoachFeedbackPanel } from "./CoachFeedbackPanel";
 import { DeliveryMetricsPanel } from "./DeliveryMetricsPanel";
 
 interface FeedbackViewProps {
   sessionId: string;
+  scenarioTitle?: string;
   onBackToScenarios: () => void;
   pollIntervalMs?: number;
 }
@@ -24,6 +26,7 @@ async function startOrLoadEvaluation(sessionId: string): Promise<EvaluationOut> 
 
 export const FeedbackView: React.FC<FeedbackViewProps> = ({
   sessionId,
+  scenarioTitle,
   onBackToScenarios,
   pollIntervalMs = 2000,
 }) => {
@@ -96,6 +99,24 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
       stopPolling();
     };
   }, [initEvaluation]);
+
+  // Automatically save completed evaluation report to localStorage history
+  useEffect(() => {
+    if (evaluation?.status === "completed" && evaluation.result) {
+      saveSessionHistoryItem({
+        id: evaluation.id,
+        sessionId: evaluation.session_id,
+        scenarioTitle: scenarioTitle || "Practice Scenario",
+        completedAt: evaluation.completed_at || new Date().toISOString(),
+        overallScore: evaluation.result.overall_score,
+        summary: evaluation.result.summary,
+        deliveryMetrics: evaluation.metrics,
+        result: evaluation.result,
+        strengths: evaluation.result.strengths,
+        improvements: evaluation.result.improvements,
+      });
+    }
+  }, [evaluation, scenarioTitle]);
 
   const handleRetry = async () => {
     setError(null);

@@ -61,7 +61,7 @@ export const StageCharacter: React.FC<StageCharacterProps> = ({
       </div>
 
       {/* SVG Character Model with Animated Layers */}
-      <div className="relative w-44 h-56 sm:w-56 sm:h-72 md:w-64 md:h-80 flex items-end justify-center">
+      <div className="relative w-36 h-48 sm:w-48 sm:h-64 md:w-56 md:h-72 flex items-end justify-center">
         {/* Ripple Waves expanding from base when speaking */}
         {isActiveSpeaker && (
           <div className="absolute -bottom-4 w-48 sm:w-60 h-16 pointer-events-none flex items-center justify-center">

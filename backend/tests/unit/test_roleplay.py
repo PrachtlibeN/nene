@@ -83,7 +83,8 @@ def test_prompt_uses_scenario_and_sets_spoken_roleplay_boundaries() -> None:
 
     assert "Morgan Lee" in prompt
     assert "Describe a project you led." in prompt
-    assert "under 120 words" in prompt
+    assert "Adapt response length naturally to conversational depth" in prompt
+    assert "Ask ONLY ONE clear, focused question per turn" in prompt
     assert "Do not use Markdown, stage directions" in prompt
     assert "coaching, hints, feedback, or scores" in prompt
     assert "[END]" in prompt

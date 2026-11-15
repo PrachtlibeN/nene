@@ -67,12 +67,12 @@ export const RoleplayStage: React.FC<RoleplayStageProps> = ({
   const isUserSpeaking = state === "recording";
 
   return (
-    <div className="relative w-full flex-1 rounded-2xl border border-washi-300 bg-washi-100 shadow-sm overflow-hidden flex flex-col justify-between min-h-[380px] sm:min-h-[480px]">
+    <div className="relative w-full max-w-5xl mx-auto flex-1 rounded-2xl border border-washi-300 bg-washi-100 shadow-sm overflow-hidden flex flex-col justify-between min-h-[320px] sm:min-h-[400px]">
       {/* Layered SVG Vector Background */}
       <StageBackgrounds scenarioSlug={scenario.slug} />
 
       {/* Characters Canvas: Takes center stage (~75-80% height) */}
-      <div className="relative z-10 flex-1 flex items-end justify-center gap-6 sm:gap-20 px-4 pt-4 pb-2">
+      <div className="relative z-10 flex-1 flex items-end justify-center gap-6 sm:gap-16 md:gap-24 px-4 pt-2 pb-2">
         {personas.map((persona, index) => {
           const isThisSpeakerActive =
             state === "speaking" && activeSpeakerId === persona.id;
@@ -90,12 +90,12 @@ export const RoleplayStage: React.FC<RoleplayStageProps> = ({
       </div>
 
       {/* Minimalist Subtitle Box at Feet of Characters */}
-      <div className="relative z-20 px-3 pb-3 sm:px-5 sm:pb-4">
-        <div className="rounded-xl border border-washi-300 bg-white/95 backdrop-blur-md p-3.5 sm:p-4 shadow-md">
+      <div className="relative z-20 px-3 pb-3 sm:px-5 sm:pb-4 w-full">
+        <div className="max-w-2xl mx-auto rounded-xl border border-washi-300 bg-white/95 backdrop-blur-md p-3 sm:p-3.5 shadow-md">
           {displayedTurn ? (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between border-b border-washi-200 pb-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-ai-700">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between border-b border-washi-200 pb-1">
+                <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ai-700">
                   {speakerDisplayName}
                 </span>
 
@@ -109,10 +109,10 @@ export const RoleplayStage: React.FC<RoleplayStageProps> = ({
                       )
                     }
                     aria-label="Replay speech"
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-ai-600 hover:text-ai-800 transition-colors focus:outline-none"
+                    className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-ai-600 hover:text-ai-800 transition-colors focus:outline-none"
                   >
                     <svg
-                      className="h-3.5 w-3.5"
+                      className="h-3 w-3"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -129,10 +129,12 @@ export const RoleplayStage: React.FC<RoleplayStageProps> = ({
                 )}
               </div>
 
-              {/* Clean Subtitle Text */}
-              <p className="text-sm sm:text-base font-semibold text-sumi-900 leading-snug">
-                {cleanSpeakerTag(displayedTurn.text)}
-              </p>
+              {/* Clean Subtitle Text with smooth scroll and refined typography */}
+              <div className="max-h-24 sm:max-h-28 overflow-y-auto pr-1">
+                <p className="text-xs sm:text-sm md:text-base font-medium text-sumi-800 leading-relaxed">
+                  {cleanSpeakerTag(displayedTurn.text)}
+                </p>
+              </div>
             </div>
           ) : (
             <div className="py-1 text-center text-xs text-sumi-500 font-medium">

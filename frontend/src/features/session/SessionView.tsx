@@ -9,6 +9,7 @@ import {
 } from "../../api/client";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import {
+  cancelSpeech,
   cleanSpeakerTag,
   createSpeechRecognitionController,
   createSpeechSynthesisController,
@@ -80,6 +81,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const speechRef = useRef(createSpeechSynthesisController());
+  const spokenTurnIdsRef = useRef<Set<string>>(new Set());
   const webSpeechTranscriptRef = useRef<string>("");
   const pttRecognitionControllerRef = useRef<SpeechRecognitionController | null>(null);
 
@@ -103,6 +105,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
     const speech = speechRef.current;
     return () => {
       mounted = false;
+      cancelSpeech();
       if (timerRef.current) clearInterval(timerRef.current);
       if (
         mediaRecorderRef.current &&
@@ -122,14 +125,19 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
   // Speak opening panel turns sequentially with independent lip-sync and subtitles
   useEffect(() => {
-    const openingInterviewerTurns = openingTurns.filter(
-      (turn) => turn.speaker === "interviewer",
-    );
-    if (openingInterviewerTurns.length > 0) {
+    const unplayedOpeningTurns = openingTurns.filter((turn) => {
+      if (turn.speaker !== "interviewer") return false;
+      const turnKey = turn.id || `${turn.idx}-${turn.speaker}-${turn.text.slice(0, 25)}`;
+      if (spokenTurnIdsRef.current.has(turnKey)) return false;
+      spokenTurnIdsRef.current.add(turnKey);
+      return true;
+    });
+
+    if (unplayedOpeningTurns.length > 0) {
       setState("speaking");
-      setActiveSpeakingTurn(openingInterviewerTurns[0]);
+      setActiveSpeakingTurn(unplayedOpeningTurns[0]);
       speechRef.current.speakSequence(
-        openingInterviewerTurns.map((turn) => speechItemForTurn(turn, scenario)),
+        unplayedOpeningTurns.map((turn) => speechItemForTurn(turn, scenario)),
         () => {
           setState("idle");
           setActiveSpeakingTurn(null);
@@ -164,7 +172,10 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
   // Push-to-talk: Start recording
   const handleStartRecording = async () => {
-    if (state !== "idle") return;
+    cancelSpeech();
+    speechRef.current.stop();
+    setActiveSpeakingTurn(null);
+    if (state !== "idle" && state !== "speaking") return;
     setError(null);
 
     // If a mock audio recorder hook is provided (for tests)
@@ -379,6 +390,9 @@ export const SessionView: React.FC<SessionViewProps> = ({
     source: "speech" | "typed",
     speechMeta: SpeechMeta | null,
   ) => {
+    cancelSpeech();
+    speechRef.current.stop();
+    setActiveSpeakingTurn(null);
     setState("sending");
     setError(null);
     try {
@@ -400,12 +414,20 @@ export const SessionView: React.FC<SessionViewProps> = ({
       setReviewText("");
       setReviewSpeechMeta(null);
 
-      // Play interviewer turns sequentially
-      if (interviewerTurns.some((turn) => turn.text)) {
+      // Play interviewer turns sequentially (only unplayed turns)
+      const unplayedInterviewerTurns = interviewerTurns.filter((turn) => {
+        if (!turn.text) return false;
+        const turnKey = turn.id || `${turn.idx}-${turn.speaker}-${turn.text.slice(0, 25)}`;
+        if (spokenTurnIdsRef.current.has(turnKey)) return false;
+        spokenTurnIdsRef.current.add(turnKey);
+        return true;
+      });
+
+      if (unplayedInterviewerTurns.length > 0) {
         setState("speaking");
-        setActiveSpeakingTurn(interviewerTurns[0]);
+        setActiveSpeakingTurn(unplayedInterviewerTurns[0]);
         speechRef.current.speakSequence(
-          interviewerTurns.map((turn) => speechItemForTurn(turn, scenario)),
+          unplayedInterviewerTurns.map((turn) => speechItemForTurn(turn, scenario)),
           () => {
             setState("idle");
             setActiveSpeakingTurn(null);
@@ -429,6 +451,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   };
 
   const handleSendReviewedSpeech = (text: string) => {
+    cancelSpeech();
     submitTurn(text, "speech", reviewSpeechMeta);
   };
 
@@ -439,16 +462,20 @@ export const SessionView: React.FC<SessionViewProps> = ({
   };
 
   const handleSendTyped = (text: string) => {
+    cancelSpeech();
     submitTurn(text, "typed", null);
   };
 
   const handleMuteSpeaker = () => {
+    cancelSpeech();
     speechRef.current.stop();
     setState("idle");
     setActiveSpeakingTurn(null);
   };
 
   const handleReplayTurn = (text: string, speakerId?: string) => {
+    cancelSpeech();
+    speechRef.current.stop();
     setState("speaking");
     const persona = (scenario.definition.personas ?? []).find(
       (panelPersona) => panelPersona.id === speakerId,
@@ -482,6 +509,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   };
 
   const handleEndSession = async () => {
+    cancelSpeech();
     setError(null);
     try {
       speechRef.current.stop();
@@ -503,11 +531,14 @@ export const SessionView: React.FC<SessionViewProps> = ({
   return (
     <div className="h-full min-h-[100dvh] max-h-[100dvh] flex flex-col justify-between overflow-hidden bg-washi-100 p-2 sm:p-4 select-none space-y-2">
       {/* Minimalist Top Floating Toolbar */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/95 border border-washi-300 shadow-xs backdrop-blur-sm">
+      <div className="mx-auto max-w-5xl w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/95 border border-washi-300 shadow-xs backdrop-blur-sm">
         {/* Left: Back/Exit Button */}
         <button
           type="button"
-          onClick={onBackToScenarios}
+          onClick={() => {
+            cancelSpeech();
+            onBackToScenarios?.();
+          }}
           className="inline-flex items-center gap-1 text-xs font-semibold text-sumi-600 hover:text-sumi-900 focus:outline-none transition-colors"
           aria-label="Exit session"
         >
@@ -574,7 +605,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
       {/* Session Completed Banner if Ended */}
       {isSessionEnded && (
-        <div className="rounded-2xl border border-ai-300 bg-ai-50/95 p-4 text-center shadow-md backdrop-blur-sm">
+        <div className="mx-auto max-w-5xl w-full rounded-2xl border border-ai-300 bg-ai-50/95 p-4 text-center shadow-md backdrop-blur-sm">
           <h3 className="text-base font-bold text-ai-900">
             Practice Session Completed!
           </h3>
@@ -609,7 +640,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
       {/* Bottom Mobile-First Controls Area */}
       {!isSessionEnded && (
-        <div className="rounded-2xl border border-washi-300 bg-white/95 p-3 sm:p-4 shadow-md backdrop-blur-sm space-y-3">
+        <div className="mx-auto max-w-5xl w-full rounded-2xl border border-washi-300 bg-white/95 p-3 sm:p-4 shadow-md backdrop-blur-sm space-y-3">
           {/* Review Transcript Stage (No Auto-Send) */}
           {state === "review" && (
             <TranscriptReview

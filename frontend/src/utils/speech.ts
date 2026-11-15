@@ -134,6 +134,13 @@ export function stopAllSpeech(): void {
   }
 }
 
+/**
+ * Immediate cancellation of all ongoing speech and synthesis playback.
+ */
+export function cancelSpeech(): void {
+  stopAllSpeech();
+}
+
 export function createSpeechRecognitionController(
   callbacks: SpeechRecognitionCallbacks,
 ): SpeechRecognitionController {
@@ -291,6 +298,8 @@ export function createSpeechRecognitionController(
 }
 
 export function createSpeechSynthesisController(): SpeechSynthesisController {
+  let activeSequenceId = 0;
+
   const isSupported = (): boolean => {
     return (
       typeof window !== "undefined" &&
@@ -300,6 +309,7 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
   };
 
   const stop = (): void => {
+    activeSequenceId += 1;
     if (isSupported()) {
       try {
         window.speechSynthesis.cancel();
@@ -373,9 +383,12 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
     }
 
     try {
+      activeSequenceId += 1;
+      const sequenceId = activeSequenceId;
       window.speechSynthesis.cancel();
       let index = 0;
       const speakNext = (): void => {
+        if (sequenceId !== activeSequenceId) return;
         const item = sequence[index];
         if (!item) {
           onEnd?.();
@@ -391,10 +404,12 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         if (voice) utterance.voice = voice;
 
         utterance.onend = () => {
+          if (sequenceId !== activeSequenceId) return;
           index += 1;
           speakNext();
         };
         utterance.onerror = () => {
+          if (sequenceId !== activeSequenceId) return;
           index += 1;
           speakNext();
         };
