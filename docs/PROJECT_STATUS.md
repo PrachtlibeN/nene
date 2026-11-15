@@ -16,12 +16,12 @@ EchoRole là ứng dụng luyện phỏng vấn và giao tiếp theo kịch bả
 | **Frontend** | React 19 + TypeScript + Vite; SPA deploy Cloudflare Workers; tự động xác định URL Backend theo DEV/PROD |
 | **Số lượt thoại** | Cấu hình mặc định nâng lên **10 turns** (`max_turns = 10`) đồng bộ ở database entities, scenario templates và mock contracts |
 | **Hội đồng AI (Panel)** | Hai persona AI luân phiên hỏi 1 câu duy nhất/lượt; AI chốt kết thúc ở turn 10; lọc sạch toàn bộ tiền tố tên/vai trò `[Name - Role]:` |
-| **Giọng đọc (TTS)** | Tách câu ngắn chống ngắt tiếng 15s; Watchdog timeout & auto-resume; chọn Accent Anh (UK `en-GB`) / Mỹ (US `en-US`) lưu `localStorage` |
-| **Thu âm (STT)** | Cố định cơ chế Click-to-Toggle; Web Speech API tức thì khi Server STT chưa sẵn sàng; live interim preview; chống xung đột audio hardware |
+| **Giọng đọc (TTS)** | Tách câu tự nhiên, Watchdog timeout & auto-resume; chống rò rỉ Garbage Collection bằng `activeUtterances`; loại bỏ utterance khoảng trắng gây nghẽn hàng đợi Chromium; chọn Accent Anh (UK `en-GB`) / Mỹ (US `en-US`) lưu `localStorage` |
+| **Thu âm (STT)** | Hỗ trợ song song Cloud Groq Whisper STT (model `whisper-large-v3-turbo`) & Web Speech API fallback; tự động nhận diện `STT_API_KEY` / `GROQ_API_KEY` hoặc `OPENAI_API_KEY` (tiền tố `gsk_`); chuẩn hóa URL endpoint |
 | **Nhập văn bản** | Floating Modal Overlay gõ phản hồi có autofocus, nút đóng ✕ và Send; tính toán thời lượng nói ước tính (~135 WPM) thay vì 0s hay 1s |
 | **Đánh giá (Coach)** | 6 tiêu chí chuẩn hóa (song ngữ Anh - Việt); an toàn trích xuất JSON bóc markdown; Fallback Evaluation cho phiên ngắn; ẩn sạch mã ID `trn_...` |
 | **Xử lý mạng & tải** | Tự động Retry với Exponential Backoff khi gặp HTTP 429 Rate Limit hoặc timeout ở cả luồng Chat & Evaluation |
-| **Kiểm thử & Build** | **109/109 pytest pass 100%**, Ruff check 0 lỗi; **78/78 vitest pass 100%** trên 9/9 test suites; `npm run build` thành công |
+| **Kiểm thử & Build** | **114/114 pytest pass 100%**, Ruff check 0 lỗi, Mypy 41 files pass; **90/90 vitest pass 100%** trên 10/10 test suites; `npm run build` thành công |
 
 ---
 
@@ -29,6 +29,10 @@ EchoRole là ứng dụng luyện phỏng vấn và giao tiếp theo kịch bả
 
 - **Nhánh hiện tại:** `main`.
 - **Các commit nâng cấp tiêu biểu:**
+  - `99c6d7e`: *fix(speech): eliminate silent TTS dropouts, prevent Chromium GC and cancel cascading, and bind Groq Whisper STT in backend lifespan*
+  - `7b86646`: *fix(stt): normalize Groq Whisper endpoint URLs and strip whitespace from STT config*
+  - `9196b99`: *fix(audio): eliminate empty utterance collisions, support GROQ_API_KEY alias, and ensure smooth speech recognition fallback*
+  - `403b82e`: *feat(stt): enable Groq Whisper cloud STT and fix TTS audio dropout after typing*
   - `f0a420c`: *fix: robust TTS synthesis, click-to-toggle PTT, clean feedback panel, and tailored evaluation metrics*
   - `1708de2`: *feat: upgrade to 10 turns, floating keyboard modal, UK/US accent selection, robust STT and 6 evaluation criteria*
   - `d618199`: *fix: robust rate-limit retry, continuous speech recognition with interim preview, flexible AI dialogue length and clean home/history navigation*
