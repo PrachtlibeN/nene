@@ -90,9 +90,7 @@ class PanelAgent(StubRoleplayAgent):
             ),
         ]
 
-    def respond(
-        self, ctx: RoleplayContext, candidate_text: str
-    ) -> list[RoleplayReply]:
+    def respond(self, ctx: RoleplayContext, candidate_text: str) -> list[RoleplayReply]:
         return [
             RoleplayReply(
                 text="Explain your technical decision.",
@@ -226,9 +224,7 @@ def test_session_create_start_turn_history_end_and_m6_interface(environment) -> 
     assert client.post(f"/api/v1/sessions/{session_id}/end", json={}).json() == ended.json()
 
     with service.session_factory() as db:
-        conversation = db.scalar(
-            select(Conversation).where(Conversation.session_id == session_id)
-        )
+        conversation = db.scalar(select(Conversation).where(Conversation.session_id == session_id))
         assert conversation is not None
         assert conversation.model == service.settings.model_for(LLMProfile.ROLEPLAY)
         assert conversation.id == created.json()["roleplay_conversation_id"]
@@ -281,10 +277,7 @@ def test_panel_start_and_turn_responses_preserve_legacy_final_turn_and_speaker_i
         with service.session_factory() as db:
             messages = db.scalars(
                 select(Message)
-                .where(
-                    Message.conversation_id
-                    == start_data["session"]["roleplay_conversation_id"]
-                )
+                .where(Message.conversation_id == start_data["session"]["roleplay_conversation_id"])
                 .order_by(Message.seq)
             ).all()
         assistant_content = [message.content for message in messages if message.role == "assistant"]
@@ -354,17 +347,21 @@ def test_agent_failure_rolls_back_turn_and_clears_guard(tmp_path) -> None:
             assert session.turn_count == 0
             assert session.last_activity_at == "2026-11-13T09:00:00.000000Z"
             assert len(db.scalars(select(Turn).where(Turn.session_id == session_id)).all()) == 1
-            assert len(
-                db.scalars(
-                    select(Message).where(
-                        Message.conversation_id == (
-                            select(Conversation.id).where(
-                                Conversation.session_id == session_id
-                            ).scalar_subquery()
+            assert (
+                len(
+                    db.scalars(
+                        select(Message).where(
+                            Message.conversation_id
+                            == (
+                                select(Conversation.id)
+                                .where(Conversation.session_id == session_id)
+                                .scalar_subquery()
+                            )
                         )
-                    )
-                ).all()
-            ) == 1
+                    ).all()
+                )
+                == 1
+            )
 
 
 def test_concurrent_turn_is_rejected_while_first_is_in_flight(tmp_path) -> None:
@@ -412,15 +409,11 @@ def test_timeout_boundary_get_does_not_refresh_and_created_sessions_are_exempt(
 def test_list_sweeps_idle_sessions_but_not_inflight_or_created(environment) -> None:
     client, clock = environment
     active_id, scenario_id = _create_started(client)
-    in_flight_id = client.post("/api/v1/sessions", json={"scenario_id": scenario_id}).json()[
-        "id"
-    ]
+    in_flight_id = client.post("/api/v1/sessions", json={"scenario_id": scenario_id}).json()["id"]
     client.post(f"/api/v1/sessions/{in_flight_id}/start", json={})
     service = client.app.state.simulation_service
     with service.session_factory() as db:
-        db.execute(
-            update(Session).where(Session.id == in_flight_id).values(in_flight=1)
-        )
+        db.execute(update(Session).where(Session.id == in_flight_id).values(in_flight=1))
         db.commit()
     created_id = client.post("/api/v1/sessions", json={"scenario_id": scenario_id}).json()["id"]
 

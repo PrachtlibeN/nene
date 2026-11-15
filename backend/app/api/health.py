@@ -78,11 +78,7 @@ def get_health(request: Request) -> HealthOut:
     stt = STTHealthComponent(
         status=stt_status,
         model=str(speech_status.get("model") or settings.whisper_model),
-        detail=(
-            str(speech_status["detail"])
-            if speech_status.get("detail") is not None
-            else None
-        ),
+        detail=(str(speech_status["detail"]) if speech_status.get("detail") is not None else None),
     )
     overall_status = (
         "ok"

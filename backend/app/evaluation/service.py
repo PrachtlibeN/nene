@@ -121,9 +121,7 @@ class EvaluationService:
                 )
 
             last_attempt = self.db.scalar(
-                select(func.max(Evaluation.attempt)).where(
-                    Evaluation.session_id == session_id
-                )
+                select(func.max(Evaluation.attempt)).where(Evaluation.session_id == session_id)
             )
             now = format_timestamp(self.clock())
             evaluation = Evaluation(
@@ -369,9 +367,7 @@ class EvaluationService:
             metrics=metrics,
             result=result,
             error=error,
-            created_at=datetime.fromisoformat(
-                evaluation.created_at.replace("Z", "+00:00")
-            ),
+            created_at=datetime.fromisoformat(evaluation.created_at.replace("Z", "+00:00")),
             completed_at=(
                 datetime.fromisoformat(evaluation.completed_at.replace("Z", "+00:00"))
                 if evaluation.completed_at is not None
@@ -388,18 +384,14 @@ class EvaluationService:
             raise RuntimeError("Completed evaluation is missing its computed result")
         qualitative = json.loads(evaluation.result_json or "{}")
         rows = db.scalars(
-            select(EvaluationScore).where(
-                EvaluationScore.evaluation_id == evaluation.id
-            )
+            select(EvaluationScore).where(EvaluationScore.evaluation_id == evaluation.id)
         ).all()
         scores = {ScenarioCriterion(row.criterion): row for row in rows}
         criteria = []
         for criterion in CRITERIA:
             score = scores.get(criterion)
             if score is None:
-                raise RuntimeError(
-                    f"Completed evaluation is missing score {criterion.value}"
-                )
+                raise RuntimeError(f"Completed evaluation is missing score {criterion.value}")
             criteria.append(
                 CriterionScore(
                     criterion=criterion,
@@ -415,13 +407,8 @@ class EvaluationService:
             summary=evaluation.summary,
             task_outcome=TaskOutcome.model_validate(qualitative["task_outcome"]),
             criteria=criteria,
-            strengths=[
-                Strength.model_validate(item) for item in qualitative["strengths"]
-            ],
-            improvements=[
-                Improvement.model_validate(item)
-                for item in qualitative["improvements"]
-            ],
+            strengths=[Strength.model_validate(item) for item in qualitative["strengths"]],
+            improvements=[Improvement.model_validate(item) for item in qualitative["improvements"]],
             next_task=NextTask.model_validate(qualitative["next_task"]),
         )
 
@@ -433,9 +420,7 @@ class EvaluationService:
         created_at: str,
     ) -> None:
         last_seq = db.scalar(
-            select(func.max(Message.seq)).where(
-                Message.conversation_id == conversation_id
-            )
+            select(func.max(Message.seq)).where(Message.conversation_id == conversation_id)
         )
         seq = 0 if last_seq is None else int(last_seq) + 1
         for message in messages:

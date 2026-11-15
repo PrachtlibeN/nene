@@ -4,7 +4,7 @@
   "description": "Resolve a tense customer complaint while balancing urgency and realistic commitments.",
   "language": "en",
   "difficulty": 3,
-  "max_turns": 8,
+  "max_turns": 10,
   "estimated_minutes": 12,
   "definition": {
     "persona": {

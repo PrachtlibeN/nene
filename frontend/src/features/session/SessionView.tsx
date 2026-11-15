@@ -16,6 +16,7 @@ import {
   getSupportedAudioMimeType,
   isSpeechRecognitionSupported,
   stopAllSpeech,
+  type EnglishAccent,
   type SpeechRecognitionController,
   type SpeechSequenceItem,
 } from "../../utils/speech";
@@ -79,6 +80,32 @@ export const SessionView: React.FC<SessionViewProps> = ({
   // Hidden by default: user opens typing mode via keyboard toggle icon button
   const [showKeyboardFallback, setShowKeyboardFallback] = useState<boolean>(false);
 
+  // English accent preference: UK (en-GB) or US (en-US), persisted to localStorage
+  const [accent, setAccent] = useState<EnglishAccent>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("echorole_accent");
+        if (saved === "en-GB" || saved === "en-US") return saved;
+      } catch {
+        // ignore localStorage access errors
+      }
+    }
+    return "en-US";
+  });
+
+  const handleToggleAccent = () => {
+    const nextAccent: EnglishAccent = accent === "en-US" ? "en-GB" : "en-US";
+    setAccent(nextAccent);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("echorole_accent", nextAccent);
+      } catch {
+        // ignore localStorage access errors
+      }
+    }
+    pttRecognitionControllerRef.current?.setAccent(nextAccent);
+  };
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -88,22 +115,34 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const webSpeechTranscriptRef = useRef<string>("");
   const pttRecognitionControllerRef = useRef<SpeechRecognitionController | null>(null);
 
-  // Fetch speech status limits on mount
+  // Fetch speech status and health on mount to detect server STT readiness immediately
   useEffect(() => {
     let mounted = true;
-    api
-      .getSpeechStatus()
-      .then((status) => {
+    Promise.allSettled([api.getSpeechStatus(), api.getHealth()])
+      .then(([speechResult, healthResult]) => {
         if (!mounted) return;
-        if (status.limits?.max_audio_seconds) {
-          setMaxAudioSeconds(status.limits.max_audio_seconds);
+        let serverSttReady = false;
+        if (speechResult.status === "fulfilled") {
+          const status = speechResult.value;
+          if (status.limits?.max_audio_seconds) {
+            setMaxAudioSeconds(status.limits.max_audio_seconds);
+          }
+          if (status.stt?.status === "ready") {
+            serverSttReady = true;
+          }
         }
-        if (status.stt?.status === "unavailable") {
+        if (healthResult.status === "fulfilled") {
+          const health = healthResult.value;
+          if (health.components?.stt?.status === "ready") {
+            serverSttReady = true;
+          }
+        }
+        if (!serverSttReady) {
           setIsServerSttUnavailable(true);
         }
       })
       .catch(() => {
-        // Fallback to default 120s if endpoint fails
+        if (mounted) setIsServerSttUnavailable(true);
       });
     const speech = speechRef.current;
     return () => {
@@ -156,9 +195,10 @@ export const SessionView: React.FC<SessionViewProps> = ({
         (item) => {
           if (item.turn) setActiveSpeakingTurn(item.turn);
         },
+        accent,
       );
     }
-  }, [openingTurns, scenario]);
+  }, [openingTurns, scenario, accent]);
 
   // Audio reactor hook for dynamic Lip-sync and Hamon waves
   const activeSpeakerId = useMemo(() => {
@@ -225,6 +265,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
         });
       }
       try {
+        pttRecognitionControllerRef.current.setAccent(accent);
         pttRecognitionControllerRef.current.start();
         setState("recording");
         setRecordingSeconds(0);
@@ -460,18 +501,28 @@ export const SessionView: React.FC<SessionViewProps> = ({
           () => {
             setState("idle");
             setActiveSpeakingTurn(null);
+            if (response.session.status === "ended") {
+              onViewFeedback(response.session.id);
+            }
           },
           () => {
             setState("idle");
             setActiveSpeakingTurn(null);
+            if (response.session.status === "ended") {
+              onViewFeedback(response.session.id);
+            }
           },
           (item) => {
             if (item.turn) setActiveSpeakingTurn(item.turn);
           },
+          accent,
         );
       } else {
         setState("idle");
         setActiveSpeakingTurn(null);
+        if (response.session.status === "ended") {
+          onViewFeedback(response.session.id);
+        }
       }
     } catch (err) {
       setError(err);
@@ -535,6 +586,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       (item) => {
         if (item.turn) setActiveSpeakingTurn(item.turn);
       },
+      accent,
     );
   };
 
@@ -559,7 +611,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const latestTurn = turns.length > 0 ? turns[turns.length - 1] : null;
 
   return (
-    <div className="h-full min-h-[100dvh] max-h-[100dvh] flex flex-col justify-between overflow-hidden bg-washi-100 p-2 sm:p-4 select-none space-y-2">
+    <div className="min-h-[100dvh] w-full flex flex-col justify-between overflow-y-auto bg-washi-100 p-2 sm:p-4 select-none space-y-2">
       {/* Minimalist Top Floating Toolbar */}
       <div className="mx-auto max-w-5xl w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/95 border border-washi-300 shadow-xs backdrop-blur-sm">
         {/* Left: Back/Exit Button */}
@@ -608,8 +660,17 @@ export const SessionView: React.FC<SessionViewProps> = ({
           </p>
         </div>
 
-        {/* Right: End Session or View Feedback */}
-        <div>
+        {/* Right: Accent Toggle & End Session or View Feedback */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={handleToggleAccent}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-washi-300 bg-washi-50 text-sumi-700 hover:bg-washi-200 focus:outline-none transition-colors shadow-2xs"
+            title={`Accent: ${accent === "en-GB" ? "British English (UK)" : "American English (US)"}. Click to toggle.`}
+            aria-label="Toggle English Accent"
+          >
+            <span>{accent === "en-GB" ? "🇬🇧 UK" : "🇺🇸 US"}</span>
+          </button>
           {!isSessionEnded ? (
             <button
               type="button"
@@ -753,23 +814,74 @@ export const SessionView: React.FC<SessionViewProps> = ({
             </div>
           )}
 
-          {/* Optional Collapsed Keyboard Input Fallback */}
-          {(showKeyboardFallback || isMicDenied) && (
-            <div className="pt-2 border-t border-washi-200">
-              <TypedInputFallback
-                isMicDenied={isMicDenied}
-                isServerSttUnavailable={isServerSttUnavailable}
-                onMicDeniedChange={setIsMicDenied}
-                isDisabled={
-                  state === "transcribing" ||
-                  state === "waiting_reply" ||
-                  state === "speaking"
-                }
-                isSending={state === "sending"}
-                onSendTyped={handleSendTyped}
-              />
+          {/* Microphone Unavailable Warning Banner when Keyboard is closed */}
+          {isMicDenied && !showKeyboardFallback && (
+            <div
+              role="status"
+              className="rounded-lg border border-shu-200 bg-shu-50 p-2.5 text-xs text-shu-800 flex items-center justify-between gap-2"
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Microphone unavailable.</span>
+                <span className="hidden sm:inline">Use typed input to practice.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKeyboardFallback(true)}
+                className="px-2.5 py-1 text-xs font-semibold bg-shu-600 text-white rounded-md hover:bg-shu-700 transition-colors shadow-2xs"
+              >
+                Open Keyboard ⌨️
+              </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Floating Keyboard Input Modal Overlay */}
+      {showKeyboardFallback && !isSessionEnded && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Type your response"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-sumi-900/50 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowKeyboardFallback(false);
+            }
+          }}
+        >
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-washi-300 p-4 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-washi-200">
+              <div className="flex items-center gap-2">
+                <span className="text-base">⌨️</span>
+                <h3 className="text-sm font-bold text-sumi-900">Type Your Response</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKeyboardFallback(false)}
+                className="h-7 w-7 rounded-lg inline-flex items-center justify-center text-sumi-500 hover:text-sumi-900 hover:bg-washi-200 focus:outline-none transition-colors"
+                aria-label="Close keyboard input"
+              >
+                ✕
+              </button>
+            </div>
+
+            <TypedInputFallback
+              isMicDenied={isMicDenied}
+              isServerSttUnavailable={isServerSttUnavailable}
+              onMicDeniedChange={setIsMicDenied}
+              isDisabled={
+                state === "transcribing" ||
+                state === "waiting_reply" ||
+                state === "speaking"
+              }
+              isSending={state === "sending"}
+              autoFocus={true}
+              onSendTyped={(text) => {
+                handleSendTyped(text);
+                setShowKeyboardFallback(false);
+              }}
+            />
+          </div>
         </div>
       )}
     </div>

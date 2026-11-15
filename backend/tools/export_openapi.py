@@ -4,6 +4,7 @@ from pathlib import Path
 
 backend_root = Path(__file__).resolve().parents[1]
 
+
 def main() -> None:
     sys.path.insert(0, str(backend_root))
     from app.core.openapi import normalize_openapi_status_descriptions

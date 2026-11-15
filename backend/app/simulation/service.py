@@ -350,9 +350,7 @@ class SimulationService:
             )
             conversation = self._roleplay_conversation(db, session_id)
             messages = self.repository.list_messages(db, conversation.id)
-            history = [
-                _llm_message(message.role, message.content) for message in messages
-            ]
+            history = [_llm_message(message.role, message.content) for message in messages]
             context = RoleplayContext(
                 session_id=session.id,
                 conversation_id=conversation.id,
@@ -499,19 +497,19 @@ class SimulationService:
                     created_at=accepted_at,
                 )
             ] + [
-                    Message(
-                        id=new_id("msg_"),
-                        conversation_id=conversation_id,
-                        seq=next_seq + index + 1,
-                        role="assistant",
-                        content=_labeled_reply_content(reply, scenario),
-                        turn_id=interviewer_turn.id,
-                        created_at=now,
-                    )
-                    for index, (reply, interviewer_turn) in enumerate(
-                        zip(replies, interviewer_turns, strict=True)
-                    )
-                ]
+                Message(
+                    id=new_id("msg_"),
+                    conversation_id=conversation_id,
+                    seq=next_seq + index + 1,
+                    role="assistant",
+                    content=_labeled_reply_content(reply, scenario),
+                    turn_id=interviewer_turn.id,
+                    created_at=now,
+                )
+                for index, (reply, interviewer_turn) in enumerate(
+                    zip(replies, interviewer_turns, strict=True)
+                )
+            ]
             db.add_all(messages)
             session.turn_count = old_turn_count + 1
             session.in_flight = 0
@@ -611,9 +609,7 @@ class SimulationService:
             started_at=(
                 _parse_timestamp(session.started_at) if session.started_at is not None else None
             ),
-            ended_at=(
-                _parse_timestamp(session.ended_at) if session.ended_at is not None else None
-            ),
+            ended_at=(_parse_timestamp(session.ended_at) if session.ended_at is not None else None),
         )
 
     def _scenario_max_turns(self, db: DBSession, scenario_id: str) -> int:

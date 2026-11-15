@@ -5,13 +5,13 @@ interface CoachFeedbackPanelProps {
   result: EvaluationResult;
 }
 
-const CRITERION_LABELS: Record<string, string> = {
-  relevance: "Relevance & Goal Alignment",
-  structure: "Structure & Organization (STAR)",
-  clarity: "Clarity & Precision",
-  composure: "Composure Under Pressure",
-  conciseness: "Conciseness & Efficiency",
-  language_accuracy: "Language Accuracy & Register",
+const CRITERION_LABELS: Record<string, { en: string; vi: string }> = {
+  relevance: { en: "Relevance", vi: "Mức độ phù hợp của câu trả lời" },
+  structure: { en: "Structure", vi: "Cấu trúc" },
+  clarity: { en: "Clarity", vi: "Độ rõ ràng" },
+  composure: { en: "Composure", vi: "Khả năng giữ bình tĩnh" },
+  conciseness: { en: "Conciseness", vi: "Tính súc tích" },
+  language_accuracy: { en: "Language Accuracy", vi: "Độ chính xác ngôn ngữ" },
 };
 
 export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
@@ -126,12 +126,14 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
       {/* Rubric Criteria: 6 Criteria with Raw Scores & Weighted Points */}
       <div>
         <h3 className="text-xs font-bold uppercase tracking-wider text-sumi-700 mb-3">
-          Rubric Criteria Scores
+          Rubric Criteria Scores (6 Tiêu Chí Đánh Giá)
         </h3>
         <div className="grid gap-3 sm:grid-cols-2">
           {result.criteria.map((item) => {
-            const displayName =
-              CRITERION_LABELS[item.criterion] ?? item.criterion.replace("_", " ");
+            const label = CRITERION_LABELS[item.criterion] ?? {
+              en: item.criterion.replace("_", " "),
+              vi: "",
+            };
             return (
               <div
                 key={item.criterion}
@@ -139,9 +141,16 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
                 className="rounded-xl border border-washi-300 bg-washi-50/70 p-4 space-y-2 hover:bg-white hover:border-ai-300 transition-all"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <h4 className="text-xs font-bold text-sumi-900">
-                    {displayName}
-                  </h4>
+                  <div>
+                    <h4 className="text-xs font-bold text-sumi-900">
+                      {label.en}
+                    </h4>
+                    {label.vi && (
+                      <span className="text-[11px] font-normal text-sumi-500 block">
+                        {label.vi}
+                      </span>
+                    )}
+                  </div>
                   {/* Raw score and raw weighted_points from API */}
                   <div className="text-right">
                     <span className="text-sm font-black text-ai-700">

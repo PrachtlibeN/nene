@@ -27,7 +27,7 @@ export const scenarioExample: Schemas["ScenarioOut"] = {
   description: "Answer tough behavioral questions from a skeptical hiring manager.",
   language: "en",
   difficulty: 2,
-  max_turns: 8,
+  max_turns: 10,
   estimated_minutes: 10,
   personas: [
     {

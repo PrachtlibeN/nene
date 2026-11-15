@@ -31,9 +31,7 @@ def test_app_lifespan_wires_real_llm_agents(tmp_path) -> None:
         engine.dispose()
 
 
-def test_app_selects_openai_compatible_provider_for_health(
-    tmp_path, monkeypatch
-) -> None:
+def test_app_selects_openai_compatible_provider_for_health(tmp_path, monkeypatch) -> None:
     settings = Settings(
         _env_file=None,
         LLM_PROVIDER="openai_compatible",
@@ -52,6 +50,7 @@ def test_app_selects_openai_compatible_provider_for_health(
         )
     )
     provider_client = httpx.Client(transport=transport)
+
     class MockedOpenAICompatibleClient(OpenAICompatibleClient):
         def __init__(self, active_settings: Settings) -> None:
             super().__init__(active_settings, provider_client)
@@ -118,7 +117,9 @@ def test_openapi_declares_exactly_fourteen_contract_endpoints() -> None:
 def test_cors_headers_allow_default_cloudflare_and_subdomains() -> None:
     client = TestClient(create_app())
     resp1 = client.get("/openapi.json", headers={"Origin": "https://nene.siegpracht49.workers.dev"})
-    assert resp1.headers.get("access-control-allow-origin") == "https://nene.siegpracht49.workers.dev"
+    assert (
+        resp1.headers.get("access-control-allow-origin") == "https://nene.siegpracht49.workers.dev"
+    )
 
     resp2 = client.get("/openapi.json", headers={"Origin": "https://preview-123.pages.dev"})
     assert resp2.headers.get("access-control-allow-origin") == "https://preview-123.pages.dev"
@@ -131,4 +132,6 @@ def test_cors_headers_allow_default_cloudflare_and_subdomains() -> None:
         },
     )
     assert resp3.status_code == 200
-    assert resp3.headers.get("access-control-allow-origin") == "https://nene.siegpracht49.workers.dev"
+    assert (
+        resp3.headers.get("access-control-allow-origin") == "https://nene.siegpracht49.workers.dev"
+    )

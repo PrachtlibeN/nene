@@ -75,9 +75,9 @@ class OpenAICompatibleClient:
                 content = message.get("content") if isinstance(message, dict) else None
 
                 # Extract reasoning content if content is missing or empty
-                if (
-                    not isinstance(content, str) or not content.strip()
-                ) and isinstance(message, dict):
+                if (not isinstance(content, str) or not content.strip()) and isinstance(
+                    message, dict
+                ):
                     reasoning = message.get("reasoning_content") or message.get("reasoning")
                     if isinstance(reasoning, str) and reasoning.strip():
                         content = reasoning
@@ -113,10 +113,7 @@ class OpenAICompatibleClient:
                     latency_ms=int((time.perf_counter() - started) * 1000),
                 )
             except Exception as exc:
-                if (
-                    not self._is_retryable_chat_error(exc)
-                    or attempt == self.MAX_CHAT_RETRIES - 1
-                ):
+                if not self._is_retryable_chat_error(exc) or attempt == self.MAX_CHAT_RETRIES - 1:
                     raise
                 last_error = exc
                 delay = (
@@ -143,11 +140,7 @@ class OpenAICompatibleClient:
                 return True
             if exc.code == ErrorCode.LLM_UNAVAILABLE:
                 msg = exc.message.lower()
-                if (
-                    "authentication failed" in msg
-                    or "http 404" in msg
-                    or "rate limited" in msg
-                ):
+                if "authentication failed" in msg or "http 404" in msg or "rate limited" in msg:
                     return False
                 return True
         return False
@@ -197,11 +190,7 @@ class OpenAICompatibleClient:
         json: dict[str, object] | None = None,
     ) -> httpx.Response:
         api_key = self._settings.openai_api_key.get_secret_value()
-        headers = (
-            {"Authorization": f"Bearer {api_key}"}
-            if api_key
-            else {}
-        )
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         for attempt in range(self.MAX_RATE_LIMIT_RETRIES + 1):
             try:
                 response = self._client.request(
@@ -553,9 +542,7 @@ class OllamaClient:
     ) -> None:
         body = response.text
         model = model_config.model if model_config else None
-        if response.status_code == 404 or (
-            "model" in body.lower() and "not found" in body.lower()
-        ):
+        if response.status_code == 404 or ("model" in body.lower() and "not found" in body.lower()):
             details: dict[str, object] = {}
             if model is not None:
                 details = {"model": model, "hint": f"ollama pull {model}"}

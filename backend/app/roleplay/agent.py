@@ -24,7 +24,7 @@ def _strip_speaker_prefix(
     while True:
         match = _SPEAKER_BRACKET_RE.match(cleaned)
         if match:
-            cleaned = cleaned[match.end():].strip()
+            cleaned = cleaned[match.end() :].strip()
         else:
             break
 
@@ -33,6 +33,12 @@ def _strip_speaker_prefix(
         "interviewer 1",
         "interviewer 2",
         "panelist",
+        "alex",
+        "sarah",
+        "morgan",
+        "priya",
+        "nina",
+        "dana",
     ]
     if persona is not None:
         if persona.name:
@@ -110,47 +116,65 @@ class RoleplayAgent:
         self, ctx: RoleplayContext, candidate_text: str
     ) -> RoleplayReply | list[RoleplayReply]:
         personas = ctx.scenario.definition.personas
+        is_final_turn = ctx.turn_index >= ctx.max_turns
+
         if not personas:
+            if is_final_turn:
+                closing_reply = self._generate(
+                    ctx,
+                    None,
+                    ctx.history,
+                    candidate_text,
+                    (
+                        "This is the final turn of the interview. Do not ask any new questions. "
+                        "Provide a brief, professional closing assessment and acknowledgment "
+                        "of the candidate's answers, thank them warmly for their time, "
+                        "state that the interview is concluded, and end with the marker [END]."
+                    ),
+                )
+                return RoleplayReply(
+                    text=closing_reply.text,
+                    should_end=True,
+                    llm=closing_reply.llm,
+                    speaker_id=closing_reply.speaker_id,
+                    speaker_name=closing_reply.speaker_name,
+                )
             return self._generate(ctx, None, ctx.history, candidate_text, None)
 
-        if ctx.turn_index % 2:
-            first = self._generate(
+        persona_index = (ctx.turn_index - 1) % len(personas)
+        assigned_persona = personas[persona_index]
+
+        if is_final_turn:
+            closing_reply = self._generate(
                 ctx,
-                personas[0],
+                assigned_persona,
                 ctx.history,
                 candidate_text,
-                "Briefly assess the candidate's answer from your focus area and add one "
-                "specific observation or challenge. Do not ask a question; the other "
-                "panel member will ask the follow-up.",
-            )
-            if first.should_end:
-                return [first]
-            history = [
-                *ctx.history,
-                LLMMessage(role="user", content=candidate_text),
-                LLMMessage(
-                    role="assistant",
-                    content=self._labeled_text(first, personas[0].role_title),
+                (
+                    "This is the final turn of the interview. Do not ask any new questions. "
+                    "Provide a brief, professional closing assessment and acknowledgment "
+                    "of the candidate's answers, thank them warmly for their time, "
+                    "state that the interview is concluded, and include the marker [END]."
                 ),
-            ]
-            second = self._generate(
-                ctx,
-                personas[1],
-                history,
-                None,
-                "Build on the previous panel member's observation without repeating "
-                "it, then ask the candidate one probing follow-up question.",
             )
-            return [first, second]
+            return RoleplayReply(
+                text=closing_reply.text,
+                should_end=True,
+                llm=closing_reply.llm,
+                speaker_id=closing_reply.speaker_id,
+                speaker_name=closing_reply.speaker_name,
+            )
 
-        persona_index = ((ctx.turn_index // 2) - 1) % 2
         return self._generate(
             ctx,
-            personas[persona_index],
+            assigned_persona,
             ctx.history,
             candidate_text,
-            "Continue the interview from your focus area. Ask at most one concise "
-            "follow-up question and do not repeat earlier panel questions.",
+            (
+                "Continue the interview from your focus area. Acknowledge the candidate's response "
+                "and ask exactly one clear, focused follow-up question. "
+                "Do not repeat earlier panel questions."
+            ),
         )
 
     def _generate(

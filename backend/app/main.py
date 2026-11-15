@@ -57,13 +57,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 cast(LLMClient, llm_client),
                 app_settings,
             )
-        owns_evaluation_coach = (
-            getattr(application.state, "evaluation_coach", None) is None
-        )
+        owns_evaluation_coach = getattr(application.state, "evaluation_coach", None) is None
         if owns_evaluation_coach:
-            application.state.evaluation_coach = EvaluationCoach(
-                cast(LLMClient, llm_client)
-            )
+            application.state.evaluation_coach = EvaluationCoach(cast(LLMClient, llm_client))
 
         try:
             yield

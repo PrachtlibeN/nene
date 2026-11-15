@@ -56,9 +56,7 @@ def make_panel_scenario() -> ScenarioOut:
         ),
     ]
     return scenario.model_copy(
-        update={
-            "definition": scenario.definition.model_copy(update={"personas": personas})
-        }
+        update={"definition": scenario.definition.model_copy(update={"personas": personas})}
     )
 
 
@@ -67,6 +65,7 @@ def make_context(
     *,
     scenario: ScenarioOut | None = None,
     turn_index: int = 1,
+    max_turns: int = 10,
 ) -> RoleplayContext:
     return RoleplayContext(
         session_id="ses_test",
@@ -74,7 +73,7 @@ def make_context(
         scenario=scenario or make_scenario(),
         history=history or [],
         turn_index=turn_index,
-        max_turns=8,
+        max_turns=max_turns,
     )
 
 
@@ -175,58 +174,64 @@ def test_panel_opening_uses_both_personas_and_labels_first_speaker_in_history() 
     ]
     assert "Do not ask the candidate a question" in llm.calls[0][1][0].content
     assert "ask the candidate one focused first question" in llm.calls[1][1][0].content
-    assert llm.calls[1][1][1].content.startswith(
-        "[Alex - Engineering Manager]: Welcome."
-    )
+    assert llm.calls[1][1][1].content.startswith("[Alex - Engineering Manager]: Welcome.")
 
 
-def test_panel_odd_candidate_turn_gets_two_turns_with_labeled_context() -> None:
+def test_panel_candidate_turns_alternate_single_speaker() -> None:
     settings = Settings(OLLAMA_MODEL="test-model")
     llm = FakeLLMClient(
         settings,
         replies=[
             "The result is useful, but explain your own role.",
             "How did you resolve the disagreement with the platform team?",
+            "What metrics did you track?",
         ],
     )
     agent = RoleplayAgent(llm, settings)
-    candidate_text = "I led a six-person migration."
 
-    replies = agent.respond(
-        make_context(scenario=make_panel_scenario(), turn_index=1),
-        candidate_text,
+    first_turn = agent.respond(
+        make_context(scenario=make_panel_scenario(), turn_index=1, max_turns=10),
+        "I led a six-person migration.",
+    )
+    second_turn = agent.respond(
+        make_context(scenario=make_panel_scenario(), turn_index=2, max_turns=10),
+        "We aligned on the architecture.",
+    )
+    third_turn = agent.respond(
+        make_context(scenario=make_panel_scenario(), turn_index=3, max_turns=10),
+        "We reduced latency by 30%.",
     )
 
-    assert isinstance(replies, list)
-    assert [reply.speaker_id for reply in replies] == ["alex", "sarah"]
-    second_history = llm.calls[1][1]
-    assert second_history[-2].content == candidate_text
-    assert second_history[-1].content.startswith(
-        "[Alex - Engineering Manager]: The result"
-    )
+    assert not isinstance(first_turn, list)
+    assert not isinstance(second_turn, list)
+    assert not isinstance(third_turn, list)
+    assert first_turn.speaker_id == "alex"
+    assert second_turn.speaker_id == "sarah"
+    assert third_turn.speaker_id == "alex"
 
 
-def test_panel_even_candidate_turns_alternate_single_speaker() -> None:
+def test_panel_final_turn_closes_interview_and_marks_should_end() -> None:
     settings = Settings(OLLAMA_MODEL="test-model")
     llm = FakeLLMClient(
         settings,
-        replies=["What was the measurable outcome?", "Who did you align first?"],
+        replies=[
+            "Thank you for sharing your experience today. The interview is now concluded. [END]",
+        ],
     )
     agent = RoleplayAgent(llm, settings)
 
-    second_turn = agent.respond(
-        make_context(scenario=make_panel_scenario(), turn_index=2),
-        "I ran the first rollout.",
-    )
-    fourth_turn = agent.respond(
-        make_context(scenario=make_panel_scenario(), turn_index=4),
-        "We reduced latency by a third.",
+    final_turn = agent.respond(
+        make_context(scenario=make_panel_scenario(), turn_index=10, max_turns=10),
+        "Thank you, I enjoyed discussing this project.",
     )
 
-    assert not isinstance(second_turn, list)
-    assert not isinstance(fourth_turn, list)
-    assert second_turn.speaker_id == "alex"
-    assert fourth_turn.speaker_id == "sarah"
+    assert not isinstance(final_turn, list)
+    assert final_turn.speaker_id == "sarah"
+    assert final_turn.should_end is True
+    assert "[END]" not in final_turn.text
+    instruction_prompt = llm.calls[0][1][0].content
+    assert "This is the final turn of the interview" in instruction_prompt
+    assert "Do not ask any new questions" in instruction_prompt
 
 
 def test_reply_strips_bracketed_and_named_speaker_prefixes() -> None:

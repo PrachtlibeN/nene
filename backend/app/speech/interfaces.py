@@ -55,9 +55,7 @@ class FakeSpeechEngine:
         self.text = text
         self.duration_ms = duration_ms
         self.avg_confidence = avg_confidence
-        self.segments = segments or [
-            SpeechSegment(0, duration_ms, text, avg_confidence)
-        ]
+        self.segments = segments or [SpeechSegment(0, duration_ms, text, avg_confidence)]
         self.model = model
         self.device = device
         self.engine = engine

@@ -40,9 +40,7 @@ def compute_delivery_metrics(transcript: Sequence[TurnOut]) -> DeliveryMetrics:
     speech_turns = [turn for turn in candidates if turn.source.value == "speech"]
     if speech_turns:
         speaking_time_ms = sum(
-            turn.speech_meta.duration_ms
-            for turn in speech_turns
-            if turn.speech_meta is not None
+            turn.speech_meta.duration_ms for turn in speech_turns if turn.speech_meta is not None
         )
         speech_word_count = sum(len(_words(turn.text)) for turn in speech_turns)
         words_per_minute = (
@@ -53,12 +51,9 @@ def compute_delivery_metrics(transcript: Sequence[TurnOut]) -> DeliveryMetrics:
         confidences = [
             turn.speech_meta.avg_confidence
             for turn in speech_turns
-            if turn.speech_meta is not None
-            and turn.speech_meta.avg_confidence is not None
+            if turn.speech_meta is not None and turn.speech_meta.avg_confidence is not None
         ]
-        avg_stt_confidence = (
-            round(sum(confidences) / len(confidences), 3) if confidences else None
-        )
+        avg_stt_confidence = round(sum(confidences) / len(confidences), 3) if confidences else None
     else:
         speaking_time_ms = None
         words_per_minute = None
@@ -72,9 +67,7 @@ def compute_delivery_metrics(transcript: Sequence[TurnOut]) -> DeliveryMetrics:
         words_per_minute=words_per_minute,
         filler_words={
             "total": filler_total,
-            "per_100_words": round(filler_total * 100 / total_words, 1)
-            if total_words
-            else 0.0,
+            "per_100_words": round(filler_total * 100 / total_words, 1) if total_words else 0.0,
             "breakdown": filler_breakdown,
         },
         avg_stt_confidence=avg_stt_confidence,

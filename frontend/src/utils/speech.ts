@@ -4,13 +4,21 @@
 
 import type { TurnOut } from "../api/client";
 
+export type EnglishAccent = "en-US" | "en-GB";
+
 export interface SpeechSynthesisController {
-  speak: (text: string, onEnd?: () => void, onError?: () => void) => void;
+  speak: (
+    text: string,
+    onEnd?: () => void,
+    onError?: () => void,
+    accent?: EnglishAccent,
+  ) => void;
   speakSequence: (
     items: SpeechSequenceItem[],
     onEnd?: () => void,
     onError?: () => void,
     onItemStart?: (item: SpeechSequenceItem, index: number) => void,
+    accent?: EnglishAccent,
   ) => void;
   stop: () => void;
   isSpeaking: () => boolean;
@@ -100,6 +108,7 @@ export interface SpeechRecognitionController {
   start: () => void;
   stop: (options?: { immediate?: boolean }) => void;
   abort: () => void;
+  setAccent: (accent: EnglishAccent) => void;
   isListening: () => boolean;
   isStarting: () => boolean;
   isSupported: () => boolean;
@@ -182,6 +191,8 @@ export function createSpeechRecognitionController(
 ): SpeechRecognitionController {
   let isStarting = false;
   let isListening = false;
+  let shouldBeListening = false;
+  let currentAccent: EnglishAccent = "en-US";
   let stopTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let currentInstance: BrowserSpeechRecognitionInstance | null = null;
 
@@ -209,7 +220,7 @@ export function createSpeechRecognitionController(
     }
 
     const recognition = new SpeechRecognitionClass();
-    recognition.lang = "en-US";
+    recognition.lang = currentAccent;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognition.continuous = true;
@@ -222,6 +233,14 @@ export function createSpeechRecognitionController(
 
     recognition.onend = () => {
       clearPendingStop();
+      if (shouldBeListening) {
+        try {
+          recognition.start();
+          return;
+        } catch {
+          // If restart fails, proceed to clean up
+        }
+      }
       isStarting = false;
       isListening = false;
       if (activeRecognitionInstance === recognition) {
@@ -232,6 +251,7 @@ export function createSpeechRecognitionController(
 
     recognition.onerror = (event: BrowserSpeechRecognitionErrorEvent) => {
       clearPendingStop();
+      shouldBeListening = false;
       isStarting = false;
       isListening = false;
       if (activeRecognitionInstance === recognition) {
@@ -285,6 +305,7 @@ export function createSpeechRecognitionController(
       return;
     }
 
+    shouldBeListening = true;
     isStarting = true;
     try {
       const recognition = initInstance();
@@ -304,10 +325,12 @@ export function createSpeechRecognitionController(
           const retryRecognition = initInstance();
           retryRecognition.start();
         } catch {
+          shouldBeListening = false;
           isStarting = false;
           isListening = false;
         }
       } else {
+        shouldBeListening = false;
         isStarting = false;
         isListening = false;
         callbacks.onError?.(
@@ -319,6 +342,7 @@ export function createSpeechRecognitionController(
   };
 
   const stop = (options?: { immediate?: boolean }): void => {
+    shouldBeListening = false;
     isStarting = false;
     clearPendingStop();
 
@@ -343,6 +367,7 @@ export function createSpeechRecognitionController(
 
   const abort = (): void => {
     clearPendingStop();
+    shouldBeListening = false;
     isStarting = false;
     isListening = false;
     if (currentInstance) {
@@ -358,10 +383,18 @@ export function createSpeechRecognitionController(
     }
   };
 
+  const setAccent = (accent: EnglishAccent): void => {
+    currentAccent = accent;
+    if (currentInstance) {
+      currentInstance.lang = accent;
+    }
+  };
+
   return {
     start,
     stop,
     abort,
+    setAccent,
     isListening: () => isListening,
     isStarting: () => isStarting,
     isSupported: isSpeechRecognitionSupported,
@@ -399,12 +432,14 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
     text: string,
     onEnd?: () => void,
     onError?: () => void,
+    accent: EnglishAccent = "en-US",
   ): void => {
-    speakSequence([{ text }], onEnd, onError);
+    speakSequence([{ text }], onEnd, onError, undefined, accent);
   };
 
   const voiceForGender = (
     gender: SpeechSequenceItem["voiceGender"],
+    accent: EnglishAccent = "en-US",
   ): SpeechSynthesisVoice | undefined => {
     if (!isSupported() || !gender) return undefined;
     const voices = window.speechSynthesis.getVoices();
@@ -413,22 +448,39 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
     );
     if (englishVoices.length === 0) return undefined;
 
-    const maleHint = /\b(male|man|david|mark|daniel|james|alex)\b/i;
-    const femaleHint = /\b(female|woman|zira|susan|samantha|karen|aria)\b/i;
-    const maleVoice = englishVoices.find((voice) => maleHint.test(voice.name));
-    const femaleVoice = englishVoices.find((voice) => femaleHint.test(voice.name));
+    const accentPrefix = accent.toLowerCase().startsWith("en-gb") ? "en-gb" : "en-us";
+    const accentVoices = englishVoices.filter(
+      (v) =>
+        v.lang.toLowerCase().replace("_", "-").startsWith(accentPrefix) ||
+        (accentPrefix === "en-gb" && /\b(uk|british|gb)\b/i.test(v.name)) ||
+        (accentPrefix === "en-us" && /\b(us|american)\b/i.test(v.name)),
+    );
+
+    const pool = accentVoices.length > 0 ? accentVoices : englishVoices;
+
+    const maleHint =
+      accentPrefix === "en-gb"
+        ? /\b(daniel|oliver|george|arthur|male|man)\b/i
+        : /\b(david|mark|guy|james|alex|male|man)\b/i;
+    const femaleHint =
+      accentPrefix === "en-gb"
+        ? /\b(kate|serena|hazel|victoria|susan|female|woman)\b/i
+        : /\b(zira|samantha|aria|jenny|female|woman)\b/i;
+
+    const maleVoice = pool.find((voice) => maleHint.test(voice.name));
+    const femaleVoice = pool.find((voice) => femaleHint.test(voice.name));
 
     if (gender === "male") {
       return (
         maleVoice ??
-        englishVoices.find((voice) => voice !== femaleVoice) ??
+        pool.find((voice) => voice !== femaleVoice) ??
         englishVoices[0]
       );
     }
 
     return (
       femaleVoice ??
-      englishVoices.find((voice) => voice !== maleVoice) ??
+      pool.find((voice) => voice !== maleVoice) ??
       englishVoices[1] ??
       englishVoices[0]
     );
@@ -439,6 +491,7 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
     onEnd?: () => void,
     onError?: () => void,
     onItemStart?: (item: SpeechSequenceItem, index: number) => void,
+    accent: EnglishAccent = "en-US",
   ): void => {
     const sequence = items.filter((item) => item.text.trim().length > 0);
     if (!isSupported()) {
@@ -469,9 +522,9 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         onItemStart?.(item, index);
 
         const utterance = new window.SpeechSynthesisUtterance(item.text);
-        utterance.lang = "en-US";
+        utterance.lang = accent;
         utterance.rate = 1.0;
-        const voice = voiceForGender(item.voiceGender);
+        const voice = voiceForGender(item.voiceGender, accent);
         if (voice) utterance.voice = voice;
 
         utterance.onend = () => {

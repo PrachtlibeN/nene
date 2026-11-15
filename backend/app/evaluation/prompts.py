@@ -53,8 +53,7 @@ def build_coach_user_prompt(
     transcript: list[TurnOut],
 ) -> str:
     turns = "\n".join(
-        f"{turn.id} [{_turn_speaker(scenario, turn)}]: {turn.text}"
-        for turn in transcript
+        f"{turn.id} [{_turn_speaker(scenario, turn)}]: {turn.text}" for turn in transcript
     )
     success_criteria = "\n".join(f"- {item}" for item in scenario.success_criteria)
     focus = ", ".join(item.value for item in scenario.evaluation_focus)

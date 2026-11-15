@@ -21,9 +21,7 @@ def make_settings(**overrides: object) -> Settings:
 def chat_response(**overrides: object) -> httpx.Response:
     body: dict[str, object] = {
         "model": "cloud-test-model",
-        "choices": [
-            {"message": {"role": "assistant", "content": "A useful response."}}
-        ],
+        "choices": [{"message": {"role": "assistant", "content": "A useful response."}}],
         "usage": {"prompt_tokens": 15, "completion_tokens": 8},
     }
     body.update(overrides)
@@ -75,9 +73,7 @@ def test_chat_sends_compatible_payload_and_parses_usage() -> None:
 def test_json_schema_requests_json_object_format() -> None:
     requests: list[httpx.Request] = []
     client = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda request: (requests.append(request) or chat_response())
-        )
+        transport=httpx.MockTransport(lambda request: (requests.append(request) or chat_response()))
     )
     llm = OpenAICompatibleClient(make_settings(), client)
     llm.chat(
@@ -163,9 +159,7 @@ def test_chat_distinguishes_provider_model_errors_from_endpoint_errors(
     expected_code: ErrorCode,
 ) -> None:
     client = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda request: httpx.Response(status_code, json=payload)
-        )
+        transport=httpx.MockTransport(lambda request: httpx.Response(status_code, json=payload))
     )
     llm = OpenAICompatibleClient(make_settings(), client)
 
@@ -330,9 +324,7 @@ def test_chat_falls_back_to_profile_model_when_missing() -> None:
         return httpx.Response(
             200,
             json={
-                "choices": [
-                    {"message": {"role": "assistant", "content": "Valid response."}}
-                ],
+                "choices": [{"message": {"role": "assistant", "content": "Valid response."}}],
             },
         )
 

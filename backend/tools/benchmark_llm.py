@@ -188,9 +188,7 @@ def _transcript_fixtures() -> dict[str, list[TurnOut]]:
                 idx=index,
                 speaker=speaker,
                 text=text,
-                source=TurnSource.GENERATED
-                if speaker == "interviewer"
-                else TurnSource.TYPED,
+                source=TurnSource.GENERATED if speaker == "interviewer" else TurnSource.TYPED,
                 speech_meta=None,
                 created_at=created_at,
             )
@@ -317,9 +315,7 @@ def _benchmark_model(
                                 "latency_ms": latency,
                                 "word_count": len(reply.text.split()),
                                 "markdown": bool(_MARKDOWN_RE.search(reply.text)),
-                                "stage_directions": bool(
-                                    _STAGE_DIRECTION_RE.search(reply.text)
-                                ),
+                                "stage_directions": bool(_STAGE_DIRECTION_RE.search(reply.text)),
                                 "question_marks": reply.text.count("?"),
                             }
                         )
@@ -373,9 +369,7 @@ def _benchmark_model(
                     scores[label].append(score)
                     latency_ms = round((time.perf_counter() - evaluation_started) * 1000)
                     evaluation_latencies.append(latency_ms)
-                    candidate_ids = {
-                        turn.id for turn in transcript if turn.speaker == "candidate"
-                    }
+                    candidate_ids = {turn.id for turn in transcript if turn.speaker == "candidate"}
                     evidence_ids = {
                         evidence_id
                         for item in output.result.criteria
@@ -402,24 +396,14 @@ def _benchmark_model(
                 and not sample["stage_directions"]
             ]
             valid_coach = [sample for sample in coach_samples if sample.get("valid")]
-            first_try = [
-                sample for sample in valid_coach if sample["valid_on_first_try"]
-            ]
-            evidence_valid = [
-                sample for sample in valid_coach if sample["evidence_ids_valid"]
-            ]
+            first_try = [sample for sample in valid_coach if sample["valid_on_first_try"]]
+            evidence_valid = [sample for sample in valid_coach if sample["evidence_ids_valid"]]
             reply_p95 = _p95(roleplay_latencies[1:])
             format_pass_percent = (
-                100 * len(format_passes) / len(roleplay_samples)
-                if roleplay_samples
-                else None
+                100 * len(format_passes) / len(roleplay_samples) if roleplay_samples else None
             )
-            first_try_percent = (
-                100 * len(first_try) / len(coach_samples) if coach_samples else None
-            )
-            retry_percent = (
-                100 * len(valid_coach) / len(coach_samples) if coach_samples else None
-            )
+            first_try_percent = 100 * len(first_try) / len(coach_samples) if coach_samples else None
+            retry_percent = 100 * len(valid_coach) / len(coach_samples) if coach_samples else None
             evidence_valid_percent = (
                 100 * len(evidence_valid) / len(valid_coach) if valid_coach else None
             )
@@ -429,9 +413,7 @@ def _benchmark_model(
                 else None
             )
             strong_score_stddev = (
-                statistics.pstdev(scores["strong"])
-                if len(scores["strong"]) > 1
-                else None
+                statistics.pstdev(scores["strong"]) if len(scores["strong"]) > 1 else None
             )
             evaluation_p95 = _p95(evaluation_latencies)
             whisper_results = _benchmark_whisper(whisper_models)
@@ -461,9 +443,7 @@ def _benchmark_model(
             return {
                 "model": model,
                 "runs": runs,
-                "cold_start_reply_ms": roleplay_latencies[0]
-                if roleplay_latencies
-                else None,
+                "cold_start_reply_ms": roleplay_latencies[0] if roleplay_latencies else None,
                 "roleplay": {
                     "samples": len(roleplay_samples),
                     "successful_samples": len(roleplay_latencies),
@@ -477,10 +457,7 @@ def _benchmark_model(
                     ),
                     "one_question_percent": round(
                         100
-                        * sum(
-                            sample.get("question_marks") == 1
-                            for sample in roleplay_samples
-                        )
+                        * sum(sample.get("question_marks") == 1 for sample in roleplay_samples)
                         / len(roleplay_samples),
                         1,
                     )
@@ -512,9 +489,7 @@ def _benchmark_model(
                     "lowest_available_host_ram_mb": round(memory.lowest_available_mb)
                     if memory.lowest_available_mb is not None
                     else None,
-                    "ollama_loaded_models": _ollama_loaded_models(
-                        settings.ollama_base_url
-                    ),
+                    "ollama_loaded_models": _ollama_loaded_models(settings.ollama_base_url),
                     "gpu_vram_measurement": "not available from this CPU-only Ollama run",
                 },
                 "human_behavior_review_passed": behavior_review_passed,

@@ -29,7 +29,7 @@ class Scenario(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     language: Mapped[str] = mapped_column(String, nullable=False, default="en")
     difficulty: Mapped[int] = mapped_column(Integer, nullable=False)
-    max_turns: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
+    max_turns: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
     definition_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)

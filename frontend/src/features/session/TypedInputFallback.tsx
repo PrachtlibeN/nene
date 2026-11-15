@@ -11,6 +11,7 @@ interface TypedInputFallbackProps {
   isServerSttUnavailable?: boolean;
   isDisabled: boolean;
   isSending: boolean;
+  autoFocus?: boolean;
   onSendTyped: (text: string) => void;
   onMicDeniedChange?: (denied: boolean) => void;
 }
@@ -20,6 +21,7 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
   isServerSttUnavailable,
   isDisabled,
   isSending,
+  autoFocus = false,
   onSendTyped,
   onMicDeniedChange,
 }) => {
@@ -119,14 +121,15 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
           className="block text-xs font-semibold uppercase tracking-wider text-sumi-600"
         >
           {isMicDenied
-            ? "Type Your Response"
+            ? "Or Type Response (Microphone Unavailable)"
             : isServerSttUnavailable
-              ? "Type Your Response or Dictate with Web Speech"
+              ? "Or Type Response (Web Speech or Typed Fallback)"
               : "Or Type Response (Fallback)"}
         </label>
         <div className="relative">
           <textarea
             id="typed-response-input"
+            autoFocus={autoFocus}
             value={text}
             onChange={(e) => setText(e.target.value)}
             disabled={isDisabled || isSending}

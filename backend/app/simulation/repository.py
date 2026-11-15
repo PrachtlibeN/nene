@@ -59,9 +59,9 @@ class SimulationRepository:
     def count_messages(db: DBSession, conversation_id: str) -> int:
         return (
             db.scalar(
-                select(func.count()).select_from(Message).where(
-                    Message.conversation_id == conversation_id
-                )
+                select(func.count())
+                .select_from(Message)
+                .where(Message.conversation_id == conversation_id)
             )
             or 0
         )
@@ -69,18 +69,14 @@ class SimulationRepository:
     @staticmethod
     def count_turns(db: DBSession, session_id: str) -> int:
         return (
-            db.scalar(
-                select(func.count()).select_from(Turn).where(Turn.session_id == session_id)
-            )
+            db.scalar(select(func.count()).select_from(Turn).where(Turn.session_id == session_id))
             or 0
         )
 
     @staticmethod
     def list_turns(db: DBSession, session_id: str) -> list[Turn]:
         return list(
-            db.scalars(
-                select(Turn).where(Turn.session_id == session_id).order_by(Turn.idx)
-            ).all()
+            db.scalars(select(Turn).where(Turn.session_id == session_id).order_by(Turn.idx)).all()
         )
 
     @staticmethod
@@ -98,9 +94,7 @@ class SimulationRepository:
         total = db.scalar(count_query) or 0
         sessions = list(
             db.scalars(
-                query.order_by(Session.created_at.desc(), Session.id)
-                .limit(limit)
-                .offset(offset)
+                query.order_by(Session.created_at.desc(), Session.id).limit(limit).offset(offset)
             ).all()
         )
         return sessions, total

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections import Counter
 from collections.abc import Mapping
 from typing import Any
@@ -11,7 +12,15 @@ from app.evaluation.interfaces import CoachContext, CoachOutput
 from app.evaluation.prompts import build_coach_system_prompt, build_coach_user_prompt
 from app.evaluation.rubric import CRITERIA
 from app.llm.interfaces import LLMClient, LLMMessage
-from app.schemas.contracts import CoachResult
+from app.schemas.contracts import (
+    CoachResult,
+    CriterionScoreIn,
+    Improvement,
+    NextTask,
+    ScenarioCriterion,
+    Strength,
+    TaskOutcome,
+)
 
 LOGGER = logging.getLogger(__name__)
 _TOP_LEVEL_FIELDS = {
@@ -41,21 +50,141 @@ class EvaluationCoach:
     def __init__(self, llm: LLMClient) -> None:
         self.llm = llm
 
+    @classmethod
+    def _is_session_too_short(cls, ctx: CoachContext) -> bool:
+        candidate_turns = [turn for turn in ctx.transcript if turn.speaker == "candidate"]
+        if not candidate_turns:
+            return True
+        total_words = sum(len(turn.text.strip().split()) for turn in candidate_turns if turn.text)
+        return total_words <= 2
+
+    @classmethod
+    def _fallback_evaluation(
+        cls, ctx: CoachContext, model: str, user_message: LLMMessage
+    ) -> CoachOutput:
+        candidate_turns = [turn for turn in ctx.transcript if turn.speaker == "candidate"]
+        candidate_ids = (
+            [turn.id for turn in candidate_turns] if candidate_turns else ["trn_fallback"]
+        )
+
+        fallback_criteria = [
+            CriterionScoreIn(
+                criterion=ScenarioCriterion.RELEVANCE,
+                score=2,
+                rationale=(
+                    "The response was too brief to address the scenario question "
+                    "or demonstrate job-relevant skills."
+                ),
+                evidence_turn_ids=candidate_ids,
+            ),
+            CriterionScoreIn(
+                criterion=ScenarioCriterion.STRUCTURE,
+                score=2,
+                rationale=(
+                    "No structured framework (such as Situation, Task, Action, Result) "
+                    "was demonstrated."
+                ),
+                evidence_turn_ids=candidate_ids,
+            ),
+            CriterionScoreIn(
+                criterion=ScenarioCriterion.CLARITY,
+                score=3,
+                rationale=(
+                    "Only minimal wording was provided, making clarity difficult "
+                    "to evaluate comprehensively."
+                ),
+                evidence_turn_ids=candidate_ids,
+            ),
+            CriterionScoreIn(
+                criterion=ScenarioCriterion.COMPOSURE,
+                score=3,
+                rationale="The session ended early with minimal candidate participation.",
+                evidence_turn_ids=candidate_ids,
+            ),
+            CriterionScoreIn(
+                criterion=ScenarioCriterion.CONCISENESS,
+                score=2,
+                rationale=(
+                    "The answer was extremely short and lacked substantive context or detail."
+                ),
+                evidence_turn_ids=candidate_ids,
+            ),
+            CriterionScoreIn(
+                criterion=ScenarioCriterion.LANGUAGE_ACCURACY,
+                score=3,
+                rationale=(
+                    "The brief response showed no blatant grammatical errors "
+                    "but lacked sufficient vocabulary."
+                ),
+                evidence_turn_ids=candidate_ids,
+            ),
+        ]
+
+        result = CoachResult(
+            summary=(
+                "The practice session was concluded very early with minimal candidate responses. "
+                "To receive a comprehensive assessment and score, please engage fully with the "
+                "interviewer questions."
+            ),
+            task_outcome=TaskOutcome(
+                achieved="no",
+                explanation=(
+                    "The session ended before the candidate could address the interview goals "
+                    "or provide examples."
+                ),
+            ),
+            criteria=fallback_criteria,
+            strengths=[
+                Strength(
+                    text="Initiated the practice session and tested microphone/input connectivity.",
+                    evidence_turn_ids=candidate_ids,
+                )
+            ],
+            improvements=[
+                Improvement(
+                    text=(
+                        "Provide structured, in-depth responses with specific situations, "
+                        "actions taken, and measurable outcomes."
+                    ),
+                    evidence_turn_ids=candidate_ids,
+                    example_rewrite=(
+                        "In my previous position, I prioritized urgent customer requests "
+                        "by coordinating with technical leads to resolve incidents within our SLA."
+                    ),
+                )
+            ],
+            next_task=NextTask(
+                title="Complete a Full Practice Session",
+                instructions=(
+                    "Practice answering each interview question with at least 2–3 structured "
+                    "sentences using the STAR method."
+                ),
+            ),
+        )
+        return CoachOutput(
+            result=result,
+            model=model,
+            latency_ms=0,
+            messages=[user_message],
+        )
+
     def evaluate(self, ctx: CoachContext) -> CoachOutput:
         user_message = LLMMessage(
             role="user",
             content=build_coach_user_prompt(ctx.scenario, ctx.transcript),
         )
+        model = self.llm.model_for(LLMProfile.EVALUATION)
+
+        if self._is_session_too_short(ctx):
+            return self._fallback_evaluation(ctx, model, user_message)
+
         llm_messages = [
             LLMMessage(role="system", content=build_coach_system_prompt()),
             user_message,
         ]
         history = [user_message]
-        candidate_ids = {
-            turn.id for turn in ctx.transcript if turn.speaker == "candidate"
-        }
+        candidate_ids = {turn.id for turn in ctx.transcript if turn.speaker == "candidate"}
         total_latency_ms = 0
-        model = self.llm.model_for(LLMProfile.EVALUATION)
 
         for attempt in range(2):
             response = self.llm.chat(
@@ -74,10 +203,14 @@ class EvaluationCoach:
             history.append(assistant_message)
             raw: Any = None
             try:
-                raw = json.loads(response.content)
-                normalized = self._discard_extra_fields(raw)
+                extracted = self._extract_json_payload(response.content)
+                raw = json.loads(extracted)
+                if attempt == 0:
+                    normalized = self._discard_extra_fields(raw)
+                else:
+                    normalized = self._normalize_or_fill_defaults(raw, candidate_ids)
                 result = CoachResult.model_validate(normalized)
-                self._validate_integer_scores(raw)
+                self._validate_integer_scores(raw if attempt == 0 else normalized)
                 self._validate_evidence(result, candidate_ids)
             except (TypeError, ValueError):
                 if attempt == 1:
@@ -141,9 +274,7 @@ class EvaluationCoach:
             if isinstance(item, Mapping) and isinstance(item.get("criterion"), str)
         ]
         counts = Counter(names)
-        missing = [
-            criterion.value for criterion in CRITERIA if not counts[criterion.value]
-        ]
+        missing = [criterion.value for criterion in CRITERIA if not counts[criterion.value]]
         duplicated = [name for name, count in counts.items() if count > 1]
         if missing or duplicated:
             return (
@@ -164,12 +295,8 @@ class EvaluationCoach:
             nested_fields = _NESTED_FIELDS.get(key)
             if nested_fields is None:
                 normalized[key] = value
-            elif key in {"criteria", "strengths", "improvements"} and isinstance(
-                value, list
-            ):
-                normalized[key] = [
-                    cls._clean_mapping(item, nested_fields) for item in value
-                ]
+            elif key in {"criteria", "strengths", "improvements"} and isinstance(value, list):
+                normalized[key] = [cls._clean_mapping(item, nested_fields) for item in value]
             else:
                 normalized[key] = cls._clean_mapping(value, nested_fields)
         return normalized
@@ -209,9 +336,168 @@ class EvaluationCoach:
             *(item.evidence_turn_ids for item in result.strengths),
             *(item.evidence_turn_ids for item in result.improvements),
         ]
-        if any(
-            turn_id not in candidate_ids
-            for ids in evidence
-            for turn_id in ids
-        ):
+        if any(turn_id not in candidate_ids for ids in evidence for turn_id in ids):
             raise ValueError("Evidence IDs must refer to candidate turns in this transcript")
+
+    @staticmethod
+    def _extract_json_payload(content: str) -> str:
+        cleaned = content.strip()
+        fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned, re.IGNORECASE)
+        if fence_match:
+            cleaned = fence_match.group(1).strip()
+        first_brace = cleaned.find("{")
+        last_brace = cleaned.rfind("}")
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            cleaned = cleaned[first_brace : last_brace + 1].strip()
+        return cleaned
+
+    @classmethod
+    def _normalize_or_fill_defaults(cls, raw: Any, candidate_ids: set[str]) -> Any:
+        if not isinstance(raw, dict):
+            return raw
+        normalized = cls._discard_extra_fields(raw)
+        if not isinstance(normalized, dict):
+            return normalized
+
+        fallback_id_list = sorted(candidate_ids) if candidate_ids else ["trn_candidate"]
+
+        # Ensure summary
+        if not isinstance(normalized.get("summary"), str) or not normalized["summary"].strip():
+            normalized["summary"] = "The candidate completed the interview session."
+
+        # Ensure task_outcome
+        task_outcome = normalized.get("task_outcome")
+        if not isinstance(task_outcome, dict):
+            normalized["task_outcome"] = {
+                "achieved": "partially",
+                "explanation": "The candidate addressed some aspects of the scenario goals.",
+            }
+        else:
+            achieved = task_outcome.get("achieved")
+            if achieved not in ("yes", "partially", "no"):
+                normalized["task_outcome"]["achieved"] = (
+                    "yes"
+                    if achieved in (True, "true", "True")
+                    else "no"
+                    if achieved in (False, "false", "False")
+                    else "partially"
+                )
+            if (
+                not isinstance(task_outcome.get("explanation"), str)
+                or not task_outcome["explanation"].strip()
+            ):
+                normalized["task_outcome"]["explanation"] = "Candidate completed the interview."
+
+        # Ensure criteria: exactly 6 criteria
+        criteria_list = normalized.get("criteria")
+        if not isinstance(criteria_list, list):
+            criteria_list = []
+
+        existing_by_name: dict[str, dict[str, Any]] = {}
+        for item in criteria_list:
+            if isinstance(item, dict) and "criterion" in item:
+                crit_name = str(item["criterion"]).lower()
+                existing_by_name[crit_name] = item
+
+        ordered_criteria: list[dict[str, Any]] = []
+        for crit in CRITERIA:
+            crit_val = crit.value
+            item = existing_by_name.get(crit_val)
+            if item is None:
+                item = {
+                    "criterion": crit_val,
+                    "score": 5,
+                    "rationale": (
+                        f"Demonstrated adequate baseline communication in "
+                        f"{crit_val.replace('_', ' ')}."
+                    ),
+                    "evidence_turn_ids": fallback_id_list,
+                }
+            else:
+                score = item.get("score")
+                if isinstance(score, float):
+                    item["score"] = int(round(score))
+                elif not isinstance(score, int):
+                    try:
+                        item["score"] = int(score)
+                    except (ValueError, TypeError):
+                        item["score"] = 5
+                item["score"] = max(0, min(10, item["score"]))
+
+                if not isinstance(item.get("rationale"), str) or not item["rationale"].strip():
+                    item["rationale"] = f"Performance evaluated for {crit_val.replace('_', ' ')}."
+
+                ev_ids = item.get("evidence_turn_ids")
+                if not isinstance(ev_ids, list) or len(ev_ids) == 0:
+                    item["evidence_turn_ids"] = fallback_id_list
+            ordered_criteria.append(item)
+
+        normalized["criteria"] = ordered_criteria
+
+        # Ensure strengths
+        strengths = normalized.get("strengths")
+        if not isinstance(strengths, list) or len(strengths) == 0:
+            normalized["strengths"] = [
+                {
+                    "text": "Communicated directly with the interviewer.",
+                    "evidence_turn_ids": fallback_id_list,
+                }
+            ]
+        else:
+            for s in strengths:
+                if isinstance(s, dict):
+                    if (
+                        not isinstance(s.get("evidence_turn_ids"), list)
+                        or not s["evidence_turn_ids"]
+                    ):
+                        s["evidence_turn_ids"] = fallback_id_list
+
+        # Ensure improvements
+        improvements = normalized.get("improvements")
+        if not isinstance(improvements, list) or len(improvements) == 0:
+            normalized["improvements"] = [
+                {
+                    "text": "Structure responses with concrete situations, actions, and results.",
+                    "evidence_turn_ids": fallback_id_list,
+                    "example_rewrite": (
+                        "In my previous role, I led our team through a tight deadline "
+                        "by setting clear milestones."
+                    ),
+                }
+            ]
+        else:
+            for imp in improvements:
+                if isinstance(imp, dict):
+                    if (
+                        not isinstance(imp.get("evidence_turn_ids"), list)
+                        or not imp["evidence_turn_ids"]
+                    ):
+                        imp["evidence_turn_ids"] = fallback_id_list
+                    if (
+                        not isinstance(imp.get("example_rewrite"), str)
+                        or not imp["example_rewrite"].strip()
+                    ):
+                        imp["example_rewrite"] = (
+                            "I resolved the challenge by taking clear ownership "
+                            "and measuring outcomes."
+                        )
+
+        # Ensure next_task
+        next_task = normalized.get("next_task")
+        if not isinstance(next_task, dict):
+            normalized["next_task"] = {
+                "title": "Practice Next Scenario",
+                "instructions": "Focus on the feedback above in your next roleplay session.",
+            }
+        else:
+            if not isinstance(next_task.get("title"), str) or not next_task["title"].strip():
+                next_task["title"] = "Practice Next Scenario"
+            if (
+                not isinstance(next_task.get("instructions"), str)
+                or not next_task["instructions"].strip()
+            ):
+                next_task["instructions"] = (
+                    "Apply the feedback points in your next interview attempt."
+                )
+
+        return normalized

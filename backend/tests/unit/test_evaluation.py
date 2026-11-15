@@ -291,9 +291,7 @@ def test_delivery_metrics_count_candidate_speech_and_fillers() -> None:
 
 
 def test_speech_metrics_are_null_without_speech_turns() -> None:
-    metrics = compute_delivery_metrics(
-        [_turn("trn_typed", "candidate", "A short answer.")]
-    )
+    metrics = compute_delivery_metrics([_turn("trn_typed", "candidate", "A short answer.")])
 
     assert metrics.speaking_time_ms is None
     assert metrics.words_per_minute is None
@@ -350,11 +348,7 @@ def test_coach_uses_rubric_json_mode_and_discards_backend_fields() -> None:
     ]
     llm = FakeLLMClient(
         Settings(OLLAMA_MODEL="base", ollama_model_evaluation="evaluation"),
-        replies=[
-            json.dumps(
-                _coach_result("trn_candidate", include_backend_fields=True)
-            )
-        ],
+        replies=[json.dumps(_coach_result("trn_candidate", include_backend_fields=True))],
     )
     output = EvaluationCoach(llm).evaluate(
         CoachContext(
@@ -394,9 +388,7 @@ def test_coach_uses_rubric_json_mode_and_discards_backend_fields() -> None:
         for descriptions in RUBRIC_DESCRIPTIONS.values()
         for description in descriptions
     )
-    assert "speaking_time_ms" not in "\n".join(
-        message.content for message in llm.calls[0][1]
-    )
+    assert "speaking_time_ms" not in "\n".join(message.content for message in llm.calls[0][1])
 
 
 def test_coach_retries_invalid_evidence_once_and_then_fails() -> None:
@@ -458,6 +450,27 @@ def test_coach_retry_identifies_duplicate_and_missing_criteria() -> None:
     assert "omitted language_accuracy" in correction
 
 
+def test_coach_fallback_evaluation_when_session_too_short() -> None:
+    llm = FakeLLMClient(Settings(OLLAMA_MODEL="test-model"), replies=[])
+    context = CoachContext(
+        evaluation_id="evl_short",
+        conversation_id="cnv_ev_short",
+        scenario=_coach_scenario(),
+        transcript=[_turn("trn_hi", "candidate", "hi")],
+    )
+
+    output = EvaluationCoach(llm).evaluate(context)
+
+    assert len(llm.calls) == 0
+    assert output.latency_ms == 0
+    assert output.result.task_outcome.achieved == "no"
+    assert len(output.result.criteria) == 6
+    assert output.result.criteria[0].evidence_turn_ids == ["trn_hi"]
+    assert len(output.result.strengths) >= 1
+    assert len(output.result.improvements) >= 1
+    assert output.result.next_task.title
+
+
 def test_evaluation_endpoints_persist_separate_coach_result_and_metrics(
     evaluation_env,
 ) -> None:
@@ -466,9 +479,7 @@ def test_evaluation_endpoints_persist_separate_coach_result_and_metrics(
     assert candidate_id is not None
     llm = FakeLLMClient(
         settings,
-        replies=[
-            json.dumps(_coach_result(candidate_id, include_backend_fields=True))
-        ],
+        replies=[json.dumps(_coach_result(candidate_id, include_backend_fields=True))],
     )
     app.dependency_overrides[get_llm_client] = lambda: llm
 
@@ -516,9 +527,7 @@ def test_evaluation_endpoints_persist_separate_coach_result_and_metrics(
         ).all()
         assert all(roleplay.system_prompt not in message.content for message in messages)
         scores = db.scalars(
-            select(EvaluationScore).where(
-                EvaluationScore.evaluation_id == evaluation.id
-            )
+            select(EvaluationScore).where(EvaluationScore.evaluation_id == evaluation.id)
         ).all()
         assert len(scores) == 6
         assert sum(score.weight_percent for score in scores) == 100
@@ -536,9 +545,7 @@ def test_evaluation_endpoints_persist_separate_coach_result_and_metrics(
 
     assert llm.calls[0][2] is True
     assert llm.calls[0][0] is LLMProfile.EVALUATION
-    assert "speaking_time_ms" not in "\n".join(
-        message.content for message in llm.calls[0][1]
-    )
+    assert "speaking_time_ms" not in "\n".join(message.content for message in llm.calls[0][1])
 
 
 def test_invalid_coach_output_fails_with_metrics_and_retry_attempt(
@@ -569,14 +576,9 @@ def test_invalid_coach_output_fails_with_metrics_and_retry_attempt(
     second = client.post(f"/api/v1/sessions/{session_id}/evaluation", json={})
     assert second.status_code == 202
     assert second.json()["attempt"] == 2
-    completed = client.get(
-        f"/api/v1/sessions/{session_id}/evaluation?attempt=2"
-    )
+    completed = client.get(f"/api/v1/sessions/{session_id}/evaluation?attempt=2")
     assert completed.json()["status"] == "completed"
-    assert (
-        completed.json()["coach_conversation_id"]
-        != failed.json()["coach_conversation_id"]
-    )
+    assert completed.json()["coach_conversation_id"] != failed.json()["coach_conversation_id"]
 
 
 def test_evaluation_state_errors_and_missing_poll(evaluation_env) -> None:
@@ -615,11 +617,10 @@ def test_evaluation_state_errors_and_missing_poll(evaluation_env) -> None:
     assert in_progress.status_code == 409
     assert in_progress.json()["error"]["code"] == "EVALUATION_IN_PROGRESS"
 
+
 def test_evaluation_start_lazily_abandons_idle_session(evaluation_env) -> None:
     client, factory, clock, _, _ = evaluation_env
-    old_activity = (clock.current - timedelta(hours=2)).isoformat().replace(
-        "+00:00", "Z"
-    )
+    old_activity = (clock.current - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
     session_id, _ = _create_session(
         factory,
         status="active",
@@ -642,9 +643,7 @@ def test_evaluation_poll_lazily_abandons_without_refreshing_activity(
     evaluation_env,
 ) -> None:
     client, factory, clock, _, _ = evaluation_env
-    old_activity = (clock.current - timedelta(hours=2)).isoformat().replace(
-        "+00:00", "Z"
-    )
+    old_activity = (clock.current - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
     session_id, _ = _create_session(
         factory,
         status="active",

@@ -6,12 +6,8 @@ def build_roleplay_prompt(
     persona: ScenarioPanelPersona | None = None,
     instruction: str | None = None,
 ) -> str:
-    criteria = "\n".join(
-        f"- {item}" for item in scenario.definition.task.success_criteria
-    )
-    focus = ", ".join(
-        criterion.value for criterion in scenario.definition.evaluation_focus
-    )
+    criteria = "\n".join(f"- {item}" for item in scenario.definition.task.success_criteria)
+    focus = ", ".join(criterion.value for criterion in scenario.definition.evaluation_focus)
     if persona is None and scenario.definition.personas:
         panel = "\n".join(
             f"- {member.name}, {member.role_title}: {member.persona_prompt}"
