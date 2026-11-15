@@ -128,10 +128,10 @@ class Settings(BaseSettings):
     def is_stt_configured(self) -> bool:
         return bool(self.stt_api_key.get_secret_value().strip())
 
-    @field_validator("ollama_model", "openai_model")
+    @field_validator("ollama_model", "openai_model", "stt_model", "stt_base_url")
     @classmethod
     def normalize_model(cls, value: str | None) -> str | None:
-        return value.strip() if value is not None else None
+        return value.strip().strip("'\"") if value is not None else None
 
     @field_validator("cors_origins", mode="before")
     @classmethod

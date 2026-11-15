@@ -376,7 +376,13 @@ class GroqWhisperEngine:
             ext = "mp3"
         filename = f"audio.{ext}"
 
-        url = f"{self._base_url}/audio/transcriptions"
+        base = self._base_url.rstrip("/")
+        if base.endswith("/audio/transcriptions"):
+            url = base
+        elif base in ("https://api.groq.com", "http://api.groq.com"):
+            url = f"{base}/openai/v1/audio/transcriptions"
+        else:
+            url = f"{base}/audio/transcriptions"
         headers = {"Authorization": f"Bearer {self._api_key}"}
         data = {
             "model": self.model_name,

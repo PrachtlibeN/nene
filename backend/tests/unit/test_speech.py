@@ -415,3 +415,27 @@ def test_groq_whisper_engine_with_groq_api_key_alias() -> None:
     assert settings.is_stt_configured is True
     engine = GroqWhisperEngine(settings=settings)
     assert engine.status()["status"] == "ready"
+
+
+def test_groq_whisper_engine_url_normalization() -> None:
+    for base_input, expected_url in [
+        ("https://api.groq.com/openai/v1", "https://api.groq.com/openai/v1/audio/transcriptions"),
+        ("https://api.groq.com/openai/v1/", "https://api.groq.com/openai/v1/audio/transcriptions"),
+        (
+            "https://api.groq.com/openai/v1/audio/transcriptions",
+            "https://api.groq.com/openai/v1/audio/transcriptions",
+        ),
+        ("https://api.groq.com", "https://api.groq.com/openai/v1/audio/transcriptions"),
+    ]:
+        captured_url = None
+
+        def mock_handler(req: httpx.Request) -> httpx.Response:
+            nonlocal captured_url
+            captured_url = str(req.url)
+            return httpx.Response(200, json={"text": "ok"})
+
+        settings = Settings(STT_API_KEY="gsk_test", STT_BASE_URL=base_input)
+        client = httpx.Client(transport=httpx.MockTransport(mock_handler))
+        engine = GroqWhisperEngine(settings=settings, client=client)
+        engine.transcribe(b"bytes", "audio/webm")
+        assert captured_url == expected_url
