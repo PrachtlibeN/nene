@@ -62,7 +62,6 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
     }, pollIntervalMs);
   }, [sessionId, pollIntervalMs]);
 
-  // Initial load: fetch evaluation or start it if not started
   const initEvaluation = useCallback(async () => {
     setError(null);
     setIsPolling(true);
@@ -83,7 +82,6 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
       if (initial.status === "completed" || initial.status === "failed") {
         setIsPolling(false);
       } else {
-        // Pending or running: start 2-second polling
         startPolling();
       }
     } catch (err) {
@@ -99,7 +97,6 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
     };
   }, [initEvaluation]);
 
-  // Retry evaluation on failure
   const handleRetry = async () => {
     setError(null);
     setIsPolling(true);
@@ -120,21 +117,26 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      {/* Top Bar with Hanko Emblem & Japanese Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-washi-300 bg-white p-5 shadow-sm">
         <div>
           <button
             type="button"
             onClick={onBackToScenarios}
-            className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 focus:outline-none mb-1"
+            className="flex items-center gap-1.5 text-xs font-bold text-sumi-500 hover:text-ai-700 focus:outline-none mb-1 transition-colors"
           >
             &larr; Return to Scenarios
           </button>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">
-            Session Performance Evaluation
-          </h1>
-          <p className="text-xs text-slate-500">
-            Session ID: <span className="font-mono text-slate-700">{sessionId}</span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="hanko-stamp-filled flex h-6 w-6 items-center justify-center rounded text-xs font-bold">
+              成
+            </span>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-sumi-900">
+              Session Performance Evaluation
+            </h1>
+          </div>
+          <p className="text-xs text-sumi-500 mt-1">
+            Session ID: <span className="font-mono text-sumi-800">{sessionId}</span>
             {evaluation?.attempt != null && (
               <span> &bull; Attempt #{evaluation.attempt}</span>
             )}
@@ -144,15 +146,15 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {evaluation && (
             <span
               className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${
                 isCompleted
-                  ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                  ? "bg-matcha-100 text-matcha-800 border border-matcha-300"
                   : isFailed
-                    ? "bg-rose-100 text-rose-800 border border-rose-200"
-                    : "bg-amber-100 text-amber-800 border border-amber-200 animate-pulse"
+                    ? "bg-shu-100 text-shu-800 border border-shu-300"
+                    : "bg-yamabuki-100 text-yamabuki-800 border border-yamabuki-300 animate-pulse"
               }`}
             >
               Status: {evaluation.status}
@@ -161,7 +163,7 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
           <button
             type="button"
             onClick={onBackToScenarios}
-            className="rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none"
+            className="rounded-xl bg-ai-700 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-ai-800 focus:outline-none transition-all"
           >
             Practice New Scenario
           </button>
@@ -174,11 +176,11 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
       {isPendingOrRunning && !isCompleted && !isFailed && (
         <div
           role="status"
-          className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-8 text-center shadow-sm space-y-4"
+          className="rounded-2xl border-2 border-ai-200 bg-ai-50/70 p-8 text-center shadow-md space-y-4"
         >
           <div className="flex justify-center">
             <svg
-              className="h-10 w-10 animate-spin text-indigo-600"
+              className="h-10 w-10 animate-spin text-ai-700"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -199,14 +201,14 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-bold text-indigo-950">
+            <h3 className="text-lg font-bold text-ai-900">
               AI Coach is Evaluating Your Performance...
             </h3>
-            <p className="mt-1 text-sm text-indigo-700">
+            <p className="mt-1 text-sm text-ai-800 max-w-md mx-auto">
               Polling evaluation progress every 2 seconds. Please wait while the coach analyzes your dialogue transcript.
             </p>
             {pollCount > 0 && (
-              <span className="mt-2 inline-block rounded bg-indigo-100 px-2 py-0.5 text-xs font-mono text-indigo-800">
+              <span className="mt-2 inline-block rounded-md bg-ai-100 px-2.5 py-0.5 text-xs font-mono font-medium text-ai-800 border border-ai-200">
                 Poll checks: {pollCount}
               </span>
             )}
@@ -218,11 +220,11 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
       {isFailed && (
         <div
           role="alert"
-          className="rounded-xl border border-rose-200 bg-rose-50 p-6 shadow-sm space-y-4"
+          className="rounded-2xl border-2 border-shu-300 bg-shu-50 p-6 shadow-md space-y-4"
         >
           <div className="flex items-start gap-3">
             <svg
-              className="h-6 w-6 flex-shrink-0 text-rose-600 mt-0.5"
+              className="h-6 w-6 flex-shrink-0 text-shu-600 mt-0.5"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -235,10 +237,10 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
               />
             </svg>
             <div>
-              <h3 className="text-base font-bold text-rose-900">
+              <h3 className="text-base font-bold text-shu-900">
                 Evaluation Attempt Failed
               </h3>
-              <p className="mt-1 text-sm text-rose-800">
+              <p className="mt-1 text-sm text-shu-800">
                 {getErrorMessage(
                   evaluation?.error?.code,
                   evaluation?.error?.message,
@@ -252,7 +254,7 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
               type="button"
               onClick={handleRetry}
               disabled={isPolling}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-rose-500 focus:outline-none disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-shu-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-shu-700 focus:outline-none disabled:opacity-50 transition-colors"
             >
               {isPolling ? "Retrying..." : "Retry Evaluation"}
             </button>
@@ -263,10 +265,7 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
       {/* When completed: Show the 2 Separate Panels */}
       {isCompleted && evaluation.result && (
         <div className="space-y-6">
-          {/* Panel 1: Coach Qualitative Feedback & Raw Scores */}
           <CoachFeedbackPanel result={evaluation.result} />
-
-          {/* Panel 2: Delivery & Speech Metrics */}
           <DeliveryMetricsPanel metrics={evaluation.metrics} />
         </div>
       )}

@@ -66,14 +66,14 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
   const supported = isSpeechRecognitionSupported();
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+    <div className="rounded-xl border border-washi-300 bg-washi-50 p-4 shadow-sm space-y-3">
       {isMicDenied && (
         <div
           role="status"
-          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-start gap-2"
+          className="rounded-lg border border-shu-200 bg-shu-50 p-3 text-xs text-shu-800 flex items-start gap-2"
         >
           <svg
-            className="h-4 w-4 flex-shrink-0 text-amber-600 mt-0.5"
+            className="h-4 w-4 flex-shrink-0 text-shu-600 mt-0.5"
             viewBox="0 0 20 20"
             fill="currentColor"
           >
@@ -93,10 +93,10 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
       {isServerSttUnavailable && !supported && !isMicDenied && (
         <div
           role="status"
-          className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 flex items-start gap-2"
+          className="rounded-lg border border-ai-200 bg-ai-50 p-3 text-xs text-ai-800 flex items-start gap-2"
         >
           <svg
-            className="h-4 w-4 flex-shrink-0 text-blue-600 mt-0.5"
+            className="h-4 w-4 flex-shrink-0 text-ai-600 mt-0.5"
             viewBox="0 0 20 20"
             fill="currentColor"
           >
@@ -116,7 +116,7 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
       <form onSubmit={handleSubmit} className="space-y-2">
         <label
           htmlFor="typed-response-input"
-          className="block text-xs font-semibold uppercase tracking-wider text-slate-500"
+          className="block text-xs font-semibold uppercase tracking-wider text-sumi-600"
         >
           {isMicDenied
             ? "Type Your Response"
@@ -137,11 +137,11 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
             }
             rows={2}
             maxLength={2000}
-            className="w-full rounded-lg border border-slate-300 p-2.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
+            className="w-full rounded-lg border border-washi-300 bg-white p-2.5 text-sm text-sumi-900 shadow-inner focus:border-ai-600 focus:outline-none focus:ring-1 focus:ring-ai-600 disabled:bg-washi-200 disabled:text-sumi-400"
           />
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-sumi-400">
             {text.length}/2000 characters
           </span>
           <div className="flex items-center gap-2">
@@ -150,7 +150,7 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
                 type="button"
                 onClick={handleWebSpeech}
                 disabled={isDisabled || isSending}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-washi-300 bg-washi-100 px-3 py-1.5 text-xs font-semibold text-sumi-700 hover:bg-washi-200 disabled:opacity-50 transition-colors"
                 aria-label="Use browser speech recognition"
               >
                 {isListening ? "Listening..." : "Dictate (Web Speech)"}
@@ -160,7 +160,7 @@ export const TypedInputFallback: React.FC<TypedInputFallbackProps> = ({
               type="submit"
               onClick={handleSubmit}
               disabled={isDisabled || isSending || text.trim().length === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-ai-700 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-ai-800 focus:outline-none disabled:opacity-50 transition-all"
             >
               {isSending ? "Sending..." : "Send Typed Answer"}
             </button>

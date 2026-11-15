@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { api, type ScenarioOut, type ScenarioSummary, type SessionOut, type StartSessionOut } from "../../api/client";
+import {
+  api,
+  type ScenarioOut,
+  type ScenarioSummary,
+  type SessionOut,
+  type StartSessionOut,
+} from "../../api/client";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { ScenarioCard } from "./ScenarioCard";
 import { ScenarioDetail } from "./ScenarioDetail";
@@ -61,7 +67,6 @@ export const ScenariosView: React.FC<ScenariosViewProps> = ({
     setIsStarting(true);
     setError(null);
     try {
-      // 1. Fetch full scenario if not already loaded
       let fullScenario: ScenarioOut;
       if ("definition" in scenario) {
         fullScenario = scenario;
@@ -69,13 +74,8 @@ export const ScenariosView: React.FC<ScenariosViewProps> = ({
         fullScenario = await api.getScenario(scenario.id);
       }
 
-      // 2. Create session
       const newSession = await api.createSession(fullScenario.id);
-
-      // 3. Start session to receive opening interviewer turn
       const startData = await api.startSession(newSession.id);
-
-      // 4. Notify parent
       onSessionStarted(newSession, startData, fullScenario);
     } catch (err) {
       setError(err);
@@ -86,22 +86,30 @@ export const ScenariosView: React.FC<ScenariosViewProps> = ({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          Roleplay Practice Scenarios
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Choose a workplace simulation scenario to practice spoken communication with an AI interviewer.
-        </p>
+      {/* Header with Japanese Hanko & Calligraphy Touch */}
+      <div className="border-b border-washi-300 pb-5">
+        <div className="flex items-center gap-3">
+          <span className="hanko-stamp-filled flex h-8 w-8 items-center justify-center rounded text-sm font-bold shadow-sm">
+            場
+          </span>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-sumi-900 sm:text-3xl">
+              Roleplay Practice Scenarios
+            </h1>
+            <p className="mt-1 text-xs sm:text-sm text-sumi-600">
+              Choose a workplace simulation scenario to practice spoken communication with an AI interviewer.
+            </p>
+          </div>
+        </div>
       </div>
 
       <ErrorAlert error={error} onDismiss={() => setError(null)} />
 
       {isLoading ? (
-        <div className="flex h-48 items-center justify-center">
-          <div className="flex items-center gap-3 text-slate-500">
+        <div className="flex h-56 items-center justify-center">
+          <div className="flex items-center gap-3 text-sumi-600 font-medium">
             <svg
-              className="h-5 w-5 animate-spin text-indigo-600"
+              className="h-6 w-6 animate-spin text-ai-700"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -131,7 +139,7 @@ export const ScenariosView: React.FC<ScenariosViewProps> = ({
           isStarting={isStarting}
         />
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {scenarios.map((scenario) => (
             <ScenarioCard
               key={scenario.id}
@@ -144,7 +152,7 @@ export const ScenariosView: React.FC<ScenariosViewProps> = ({
             />
           ))}
           {scenarios.length === 0 && (
-            <p className="col-span-full py-8 text-center text-sm text-slate-500">
+            <p className="col-span-full py-12 text-center text-sm text-sumi-500">
               No scenarios found.
             </p>
           )}

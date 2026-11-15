@@ -8,6 +8,7 @@ export type APIError = Schemas["APIError"];
 export type ScenarioSummary = Schemas["ScenarioSummary"];
 export type ScenarioOut = Schemas["ScenarioOut"];
 export type ScenarioListOut = Schemas["ScenarioListOut"];
+export type ScenarioPanelPersona = Schemas["ScenarioPanelPersona"];
 
 export type SessionCreateIn = Schemas["SessionCreateIn"];
 export type SessionOut = Schemas["SessionOut"];

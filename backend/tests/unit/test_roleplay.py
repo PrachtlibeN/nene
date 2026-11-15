@@ -83,7 +83,7 @@ def test_prompt_uses_scenario_and_sets_spoken_roleplay_boundaries() -> None:
 
     assert "Morgan Lee" in prompt
     assert "Describe a project you led." in prompt
-    assert "60 words or fewer" in prompt
+    assert "under 120 words" in prompt
     assert "Do not use Markdown, stage directions" in prompt
     assert "coaching, hints, feedback, or scores" in prompt
     assert "[END]" in prompt
@@ -108,7 +108,7 @@ def test_open_session_uses_roleplay_profile_and_returns_llm_metadata() -> None:
 
 def test_respond_trims_history_and_strips_end_marker_and_caps_reply() -> None:
     settings = Settings(OLLAMA_MODEL="test-model", roleplay_history_turns=2)
-    reply_text = " ".join(["spoken"] * 61) + " [END]"
+    reply_text = " ".join(["spoken"] * 125) + " [END]"
     llm = FakeLLMClient(settings, replies=[reply_text])
     agent = RoleplayAgent(llm, settings)
     history = [
@@ -132,7 +132,26 @@ def test_respond_trims_history_and_strips_end_marker_and_caps_reply() -> None:
     ]
     assert reply.should_end
     assert "[END]" not in reply.text
-    assert len(reply.text.split()) == 60
+    assert len(reply.text.split()) == 120
+
+
+def test_truncate_preserves_sentence_boundary_when_exceeding_word_limit() -> None:
+    settings = Settings(OLLAMA_MODEL="test-model", roleplay_max_words=60)
+    sentence1 = "This is a clean first thought about the project challenges."
+    sentence2 = "We worked through multiple bottlenecks to ensure delivery on time."
+    sentence3 = "Can you share what metrics you tracked during this phase?"
+    filler = " ".join(["extra"] * 40)
+    llm = FakeLLMClient(
+        settings,
+        replies=[f"{sentence1} {sentence2} {sentence3} {filler}"],
+    )
+    agent = RoleplayAgent(llm, settings)
+
+    reply = agent.respond(make_context(), "Candidate answer")
+
+    assert reply.text.endswith("during this phase?")
+    assert len(reply.text.split()) == 30
+    assert "extra" not in reply.text
 
 
 def test_panel_opening_uses_both_personas_and_labels_first_speaker_in_history() -> None:

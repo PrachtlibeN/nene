@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     llm_timeout_s: float = Field(default=60, gt=0)
     roleplay_temperature: float = Field(default=0.8, ge=0, le=2)
     roleplay_max_tokens: int = Field(default=1024, ge=1)
+    roleplay_max_words: int = Field(
+        default=120, ge=10, validation_alias="ROLEPLAY_MAX_WORDS"
+    )
     evaluation_temperature: float = Field(default=0.2, ge=0, le=2)
     evaluation_max_tokens: int = Field(default=1500, ge=1)
     roleplay_history_turns: int = Field(default=12, ge=1)

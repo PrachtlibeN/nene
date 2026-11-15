@@ -50,6 +50,26 @@ def _strip_speaker_prefix(
     return cleaned
 
 
+def _truncate_text(text: str, max_words: int) -> str:
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+
+    truncated_words = words[:max_words]
+    candidate = " ".join(truncated_words)
+
+    # Check for sentence-ending punctuation (.!?) to avoid mid-sentence cuts
+    matches = list(re.finditer(r"[\.!?](?:\s|$)", candidate))
+    if matches:
+        last_match = matches[-1]
+        sentence_end_text = candidate[: last_match.end()].strip()
+        # Keep sentence-bounded cut if it preserves at least 40% of max_words
+        if len(sentence_end_text.split()) >= max(10, int(max_words * 0.4)):
+            return sentence_end_text
+
+    return candidate
+
+
 class RoleplayAgent:
     def __init__(self, llm: LLMClient, settings: Settings | None = None) -> None:
         self._llm = llm
@@ -164,6 +184,7 @@ class RoleplayAgent:
             result.prompt_tokens,
             result.completion_tokens,
             persona,
+            max_words=self._settings.roleplay_max_words,
         )
 
     @staticmethod
@@ -178,11 +199,12 @@ class RoleplayAgent:
         prompt_tokens: int | None,
         completion_tokens: int | None,
         persona: ScenarioPanelPersona | None = None,
+        max_words: int = 120,
     ) -> RoleplayReply:
         should_end = _END_MARKER.search(content) is not None
         text = " ".join(_END_MARKER.sub(" ", content).split())
         text = _strip_speaker_prefix(text, persona)
-        text = " ".join(text.split()[:60])
+        text = _truncate_text(text, max_words)
         if not text:
             raise AppError(
                 ErrorCode.LLM_BAD_OUTPUT,
