@@ -37,12 +37,6 @@ export const TurnList: React.FC<TurnListProps> = ({
         const speakerName = persona
           ? `${persona.name} - ${persona.role_title}`
           : turn.speaker_name ?? interviewerName;
-        const interviewerBadge =
-          personaIndex === 0
-            ? "bg-yamabuki-100 text-yamabuki-800 border-yamabuki-300"
-            : personaIndex === 1
-              ? "bg-ai-100 text-ai-800 border-ai-200"
-              : "bg-washi-200 text-sumi-700 border-washi-300";
 
         return (
           <div
@@ -53,29 +47,8 @@ export const TurnList: React.FC<TurnListProps> = ({
           >
             <div className="flex items-center gap-2 mb-1 px-1">
               <span className="text-xs font-semibold text-sumi-700">
-                {isInterviewer ? speakerName : "You (Candidate)"}
+                {isInterviewer ? speakerName : "You"}
               </span>
-              {isInterviewer && persona && (
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${interviewerBadge}`}
-                >
-                  AI #{personaIndex + 1}
-                </span>
-              )}
-              <span className="text-[10px] text-sumi-400">
-                Turn {turn.idx}
-              </span>
-              {!isInterviewer && (
-                <span
-                  className={`rounded px-1.5 py-0.2 text-[10px] font-medium uppercase ${
-                    turn.source === "speech"
-                      ? "bg-matcha-100 text-matcha-800"
-                      : "bg-ai-100 text-ai-800"
-                  }`}
-                >
-                  {turn.source}
-                </span>
-              )}
             </div>
 
             <div
@@ -88,25 +61,6 @@ export const TurnList: React.FC<TurnListProps> = ({
               <p className="whitespace-pre-wrap leading-relaxed">
                 {cleanSpeakerTag(turn.text)}
               </p>
-
-              {/* Speech metadata badge */}
-              {turn.speech_meta && (
-                <div className="mt-2 pt-2 border-t border-ai-500/30 flex flex-wrap gap-2 text-[11px] text-ai-100">
-                  <span>
-                    {(turn.speech_meta.duration_ms / 1000).toFixed(1)}s
-                  </span>
-                  <span>&bull;</span>
-                  <span>{turn.speech_meta.word_count} words</span>
-                  {turn.speech_meta.avg_confidence != null && (
-                    <>
-                      <span>&bull;</span>
-                      <span>
-                        {Math.round(turn.speech_meta.avg_confidence * 100)}% conf
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
 
               {/* Replay button for Interviewer */}
               {isInterviewer && (

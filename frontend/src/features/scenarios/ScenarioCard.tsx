@@ -16,29 +16,26 @@ export const ScenarioCard: React.FC<ScenarioCardProps> = ({
     switch (level) {
       case 1:
         return (
-          <span className="inline-flex items-center gap-1 rounded-md bg-matcha-100 border border-matcha-300 px-2 py-0.5 text-xs font-bold text-matcha-800">
-            <span>初級</span>
-            <span>Easy</span>
+          <span className="inline-flex items-center rounded-md bg-matcha-100 border border-matcha-300 px-2 py-0.5 text-xs font-bold text-matcha-800">
+            Easy
           </span>
         );
       case 2:
         return (
-          <span className="inline-flex items-center gap-1 rounded-md bg-yamabuki-100 border border-yamabuki-300 px-2 py-0.5 text-xs font-bold text-yamabuki-800">
-            <span>中級</span>
-            <span>Medium</span>
+          <span className="inline-flex items-center rounded-md bg-yamabuki-100 border border-yamabuki-300 px-2 py-0.5 text-xs font-bold text-yamabuki-800">
+            Medium
           </span>
         );
       case 3:
         return (
-          <span className="inline-flex items-center gap-1 rounded-md bg-shu-100 border border-shu-300 px-2 py-0.5 text-xs font-bold text-shu-800">
-            <span>上級</span>
-            <span>Hard</span>
+          <span className="inline-flex items-center rounded-md bg-shu-100 border border-shu-300 px-2 py-0.5 text-xs font-bold text-shu-800">
+            Hard
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 rounded-md bg-washi-200 border border-washi-300 px-2 py-0.5 text-xs font-bold text-sumi-800">
-            <span>Level {level}</span>
+          <span className="inline-flex items-center rounded-md bg-washi-200 border border-washi-300 px-2 py-0.5 text-xs font-bold text-sumi-800">
+            Level {level}
           </span>
         );
     }
@@ -46,13 +43,6 @@ export const ScenarioCard: React.FC<ScenarioCardProps> = ({
 
   return (
     <div className="group relative flex flex-col justify-between rounded-2xl border-2 border-washi-300 bg-washi-50 p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-ai-500 hover:shadow-xl hover:bg-white overflow-hidden">
-      {/* Decorative Ema Tablet Top Notch / Hanko Accent */}
-      <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none overflow-hidden">
-        <div className="absolute transform rotate-45 bg-washi-200 text-[9px] font-bold text-sumi-400 py-0.5 right-[-35px] top-[18px] w-[120px] text-center border-b border-washi-300">
-          EMA
-        </div>
-      </div>
-
       <div>
         {/* Scenario Vector Thumbnail Header */}
         <div className="relative w-full h-32 rounded-xl overflow-hidden mb-4 border border-washi-300 bg-washi-200/50">

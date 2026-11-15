@@ -2,12 +2,15 @@
  * Safe wrapper for browser SpeechSynthesis and SpeechRecognition APIs.
  */
 
+import type { TurnOut } from "../api/client";
+
 export interface SpeechSynthesisController {
   speak: (text: string, onEnd?: () => void, onError?: () => void) => void;
   speakSequence: (
     items: SpeechSequenceItem[],
     onEnd?: () => void,
     onError?: () => void,
+    onItemStart?: (item: SpeechSequenceItem, index: number) => void,
   ) => void;
   stop: () => void;
   isSpeaking: () => boolean;
@@ -17,6 +20,8 @@ export interface SpeechSynthesisController {
 export interface SpeechSequenceItem {
   text: string;
   voiceGender?: "male" | "female";
+  speakerId?: string;
+  turn?: TurnOut;
 }
 
 /**
@@ -352,9 +357,13 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
     items: SpeechSequenceItem[],
     onEnd?: () => void,
     onError?: () => void,
+    onItemStart?: (item: SpeechSequenceItem, index: number) => void,
   ): void => {
     const sequence = items.filter((item) => item.text.trim().length > 0);
     if (!isSupported()) {
+      if (sequence.length > 0) {
+        onItemStart?.(sequence[sequence.length - 1], sequence.length - 1);
+      }
       onEnd?.();
       return;
     }
@@ -373,6 +382,8 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
           return;
         }
 
+        onItemStart?.(item, index);
+
         const utterance = new window.SpeechSynthesisUtterance(item.text);
         utterance.lang = "en-US";
         utterance.rate = 1.0;
@@ -384,11 +395,8 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
           speakNext();
         };
         utterance.onerror = () => {
-          if (onError) {
-            onError();
-          } else {
-            onEnd?.();
-          }
+          index += 1;
+          speakNext();
         };
 
         window.speechSynthesis.speak(utterance);

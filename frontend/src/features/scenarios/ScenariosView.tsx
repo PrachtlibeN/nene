@@ -86,20 +86,14 @@ export const ScenariosView: React.FC<ScenariosViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header with Japanese Hanko & Calligraphy Touch */}
       <div className="border-b border-washi-300 pb-5">
-        <div className="flex items-center gap-3">
-          <span className="hanko-stamp-filled flex h-8 w-8 items-center justify-center rounded text-sm font-bold shadow-sm">
-            場
-          </span>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-sumi-900 sm:text-3xl">
-              Roleplay Practice Scenarios
-            </h1>
-            <p className="mt-1 text-xs sm:text-sm text-sumi-600">
-              Choose a workplace simulation scenario to practice spoken communication with an AI interviewer.
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-sumi-900 sm:text-3xl">
+            Roleplay Practice Scenarios
+          </h1>
+          <p className="mt-1 text-xs sm:text-sm text-sumi-600">
+            Choose a workplace simulation scenario to practice spoken communication with an AI interviewer.
+          </p>
         </div>
       </div>
 

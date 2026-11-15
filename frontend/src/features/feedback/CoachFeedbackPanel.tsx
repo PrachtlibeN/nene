@@ -21,23 +21,20 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
     switch (result.task_outcome.achieved) {
       case "yes":
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-matcha-100 px-3 py-1 text-xs font-bold text-matcha-800 border border-matcha-300">
-            <span>達成</span>
-            <span>Task Achieved</span>
+          <span className="inline-flex items-center rounded-full bg-matcha-100 px-3 py-1 text-xs font-bold text-matcha-800 border border-matcha-300">
+            Task Achieved
           </span>
         );
       case "partially":
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-yamabuki-100 px-3 py-1 text-xs font-bold text-yamabuki-800 border border-yamabuki-300">
-            <span>一部達成</span>
-            <span>Partially Achieved</span>
+          <span className="inline-flex items-center rounded-full bg-yamabuki-100 px-3 py-1 text-xs font-bold text-yamabuki-800 border border-yamabuki-300">
+            Partially Achieved
           </span>
         );
       case "no":
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-shu-100 px-3 py-1 text-xs font-bold text-shu-800 border border-shu-300">
-            <span>未達成</span>
-            <span>Not Achieved</span>
+          <span className="inline-flex items-center rounded-full bg-shu-100 px-3 py-1 text-xs font-bold text-shu-800 border border-shu-300">
+            Not Achieved
           </span>
         );
     }
@@ -58,14 +55,9 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
       <div className="border-b border-washi-200 pb-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="hanko-stamp-filled flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold">
-                評
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wider text-ai-700">
-                Panel 1: Coach Assessment &amp; Scores
-              </span>
-            </div>
+            <span className="text-xs font-bold uppercase tracking-wider text-ai-700">
+              Panel 1: Coach Assessment &amp; Scores
+            </span>
             <h2 className="text-2xl font-black text-sumi-900 mt-1 tracking-tight">
               Communication Feedback
             </h2>
@@ -133,9 +125,8 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
 
       {/* Rubric Criteria: 6 Criteria with Raw Scores & Weighted Points */}
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-sumi-700 mb-3 flex items-center gap-1.5">
-          <span>基準</span>
-          <span>Rubric Criteria Scores</span>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-sumi-700 mb-3">
+          Rubric Criteria Scores
         </h3>
         <div className="grid gap-3 sm:grid-cols-2">
           {result.criteria.map((item) => {
@@ -192,10 +183,7 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
       <div className="grid gap-6 md:grid-cols-2 pt-2 border-t border-washi-200">
         {/* Strengths (Matcha Accent) */}
         <div className="space-y-3">
-          <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-matcha-800">
-            <span className="hanko-stamp flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold text-matcha-700 border-matcha-600">
-              強
-            </span>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-matcha-800">
             Key Strengths
           </h3>
           <ul className="space-y-2">
@@ -222,10 +210,7 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
 
         {/* Improvements (Yamabuki/Amber Accent) */}
         <div className="space-y-3">
-          <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-yamabuki-800">
-            <span className="hanko-stamp flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold text-yamabuki-700 border-yamabuki-600">
-              改
-            </span>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-yamabuki-800">
             Areas for Growth
           </h3>
           <ul className="space-y-2">
@@ -261,16 +246,11 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
         </div>
       </div>
 
-      {/* Recommended Next Task (TBLT Mission Scroll) */}
+      {/* Recommended Next Task */}
       <div className="rounded-2xl border border-ai-200 bg-gradient-to-r from-ai-50 via-washi-100 to-ai-50 p-4 sm:p-5 shadow-xs">
-        <div className="flex items-center gap-1.5">
-          <span className="hanko-stamp-filled flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold">
-            令
-          </span>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-ai-700">
-            Recommended Follow-Up Task (TBLT)
-          </span>
-        </div>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-ai-700 block">
+          Recommended Follow-Up Task (TBLT)
+        </span>
         <h4 className="text-base font-bold text-ai-900 mt-1">
           {result.next_task.title}
         </h4>

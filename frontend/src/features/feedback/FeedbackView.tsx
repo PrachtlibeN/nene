@@ -127,10 +127,7 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
           >
             &larr; Return to Scenarios
           </button>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="hanko-stamp-filled flex h-6 w-6 items-center justify-center rounded text-xs font-bold">
-              成
-            </span>
+          <div className="mt-1">
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-sumi-900">
               Session Performance Evaluation
             </h1>

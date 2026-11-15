@@ -20,7 +20,6 @@ import {
 import { PushToTalkButton } from "./PushToTalkButton";
 import { RoleplayStage } from "./RoleplayStage";
 import { TranscriptReview } from "./TranscriptReview";
-import { TurnList } from "./TurnList";
 import { TypedInputFallback } from "./TypedInputFallback";
 import type { InteractionMode, PushToTalkState } from "./types";
 import { useAudioReactor } from "./useAudioReactor";
@@ -34,6 +33,7 @@ interface SessionViewProps {
   initialTurn?: TurnOut | null;
   onViewFeedback: (sessionId: string) => void;
   onEndSessionComplete?: (session: SessionOut) => void;
+  onBackToScenarios?: () => void;
   /** Test hook to inject custom audio blob creation */
   onMockRecordAudio?: () => Promise<Blob>;
 }
@@ -45,6 +45,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   initialTurn,
   onViewFeedback,
   onEndSessionComplete,
+  onBackToScenarios,
   onMockRecordAudio,
 }) => {
   const [session, setSession] = useState<SessionOut>(initialSession);
@@ -58,6 +59,9 @@ export const SessionView: React.FC<SessionViewProps> = ({
       ? "speaking"
       : "idle",
   );
+  const [activeSpeakingTurn, setActiveSpeakingTurn] = useState<TurnOut | null>(
+    openingTurns.find((turn) => turn.speaker === "interviewer") ?? null,
+  );
   const [mode, setMode] = useState<InteractionMode>("hold");
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const [maxAudioSeconds, setMaxAudioSeconds] = useState<number>(120);
@@ -69,9 +73,8 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const [isServerSttUnavailable, setIsServerSttUnavailable] = useState<boolean>(false);
   const [error, setError] = useState<unknown | null>(null);
 
-  // Transcript drawer state (default open on desktop, collapsible)
-  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
-  const [showKeyboardFallback, setShowKeyboardFallback] = useState<boolean>(true);
+  // Hidden by default: user opens typing mode via keyboard toggle icon button
+  const [showKeyboardFallback, setShowKeyboardFallback] = useState<boolean>(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -117,17 +120,27 @@ export const SessionView: React.FC<SessionViewProps> = ({
     };
   }, []);
 
-  // Speak opening panel turns in order when starting a session.
+  // Speak opening panel turns sequentially with independent lip-sync and subtitles
   useEffect(() => {
     const openingInterviewerTurns = openingTurns.filter(
       (turn) => turn.speaker === "interviewer",
     );
     if (openingInterviewerTurns.length > 0) {
       setState("speaking");
+      setActiveSpeakingTurn(openingInterviewerTurns[0]);
       speechRef.current.speakSequence(
         openingInterviewerTurns.map((turn) => speechItemForTurn(turn, scenario)),
-        () => setState("idle"),
-        () => setState("idle"),
+        () => {
+          setState("idle");
+          setActiveSpeakingTurn(null);
+        },
+        () => {
+          setState("idle");
+          setActiveSpeakingTurn(null);
+        },
+        (item) => {
+          if (item.turn) setActiveSpeakingTurn(item.turn);
+        },
       );
     }
   }, [openingTurns, scenario]);
@@ -135,13 +148,14 @@ export const SessionView: React.FC<SessionViewProps> = ({
   // Audio reactor hook for dynamic Lip-sync and Hamon waves
   const activeSpeakerId = useMemo(() => {
     if (state !== "speaking") return null;
+    if (activeSpeakingTurn) return activeSpeakingTurn.speaker_id ?? null;
     for (let i = turns.length - 1; i >= 0; i--) {
       if (turns[i].speaker === "interviewer") {
         return turns[i].speaker_id ?? null;
       }
     }
     return null;
-  }, [state, turns]);
+  }, [state, activeSpeakingTurn, turns]);
 
   const audioReactor = useAudioReactor({
     state,
@@ -177,6 +191,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
           onError: (_err, isPermanentDenied) => {
             if (isPermanentDenied) {
               setIsMicDenied(true);
+              setShowKeyboardFallback(true);
             }
             if (timerRef.current) {
               clearInterval(timerRef.current);
@@ -249,6 +264,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       startTimer();
     } catch (err: unknown) {
       setIsMicDenied(true);
+      setShowKeyboardFallback(true);
       setError(
         err instanceof Error
           ? err
@@ -263,7 +279,6 @@ export const SessionView: React.FC<SessionViewProps> = ({
       setRecordingSeconds((prev) => {
         const next = prev + 1;
         if (next >= maxAudioSeconds) {
-          // Auto-stop at max duration limit
           handleStopRecording();
         }
         return next;
@@ -290,7 +305,6 @@ export const SessionView: React.FC<SessionViewProps> = ({
       return;
     }
 
-    // If using browser Web Speech API
     if (isServerSttUnavailable && isSpeechRecognitionSupported()) {
       setState("transcribing");
       pttRecognitionControllerRef.current?.stop();
@@ -323,7 +337,6 @@ export const SessionView: React.FC<SessionViewProps> = ({
     }
   };
 
-  // Process transcription via POST /api/v1/speech/transcribe
   const processAudioTranscription = async (blob: Blob) => {
     setState("transcribing");
     setError(null);
@@ -336,7 +349,6 @@ export const SessionView: React.FC<SessionViewProps> = ({
         word_count: transcription.word_count,
         language: transcription.language,
       });
-      // Transition to review: No auto-send!
       setState("review");
     } catch (err) {
       if (err instanceof ApiError && err.code === "STT_UNAVAILABLE") {
@@ -361,7 +373,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
     }
   };
 
-  // Submit candidate turn to POST /api/v1/sessions/{id}/turns
+  // Submit candidate turn & play sequential interviewer turns
   const submitTurn = async (
     text: string,
     source: "speech" | "typed",
@@ -384,20 +396,31 @@ export const SessionView: React.FC<SessionViewProps> = ({
           : [response.interviewer_turn];
 
       setTurns((prev) => [...prev, response.candidate_turn, ...interviewerTurns]);
-
       setSession(response.session);
       setReviewText("");
       setReviewSpeechMeta(null);
 
+      // Play interviewer turns sequentially
       if (interviewerTurns.some((turn) => turn.text)) {
         setState("speaking");
+        setActiveSpeakingTurn(interviewerTurns[0]);
         speechRef.current.speakSequence(
           interviewerTurns.map((turn) => speechItemForTurn(turn, scenario)),
-          () => setState("idle"),
-          () => setState("idle"),
+          () => {
+            setState("idle");
+            setActiveSpeakingTurn(null);
+          },
+          () => {
+            setState("idle");
+            setActiveSpeakingTurn(null);
+          },
+          (item) => {
+            if (item.turn) setActiveSpeakingTurn(item.turn);
+          },
         );
       } else {
         setState("idle");
+        setActiveSpeakingTurn(null);
       }
     } catch (err) {
       setError(err);
@@ -422,6 +445,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const handleMuteSpeaker = () => {
     speechRef.current.stop();
     setState("idle");
+    setActiveSpeakingTurn(null);
   };
 
   const handleReplayTurn = (text: string, speakerId?: string) => {
@@ -429,10 +453,31 @@ export const SessionView: React.FC<SessionViewProps> = ({
     const persona = (scenario.definition.personas ?? []).find(
       (panelPersona) => panelPersona.id === speakerId,
     );
+    const replayingTurn = turns.find(
+      (t) => cleanSpeakerTag(t.text) === text || t.text.includes(text),
+    );
+    if (replayingTurn) setActiveSpeakingTurn(replayingTurn);
+
     speechRef.current.speakSequence(
-      [{ text: cleanSpeakerTag(text), voiceGender: persona?.voice_gender }],
-      () => setState("idle"),
-      () => setState("idle"),
+      [
+        {
+          text: cleanSpeakerTag(text),
+          voiceGender: persona?.voice_gender,
+          speakerId,
+          turn: replayingTurn,
+        },
+      ],
+      () => {
+        setState("idle");
+        setActiveSpeakingTurn(null);
+      },
+      () => {
+        setState("idle");
+        setActiveSpeakingTurn(null);
+      },
+      (item) => {
+        if (item.turn) setActiveSpeakingTurn(item.turn);
+      },
     );
   };
 
@@ -440,6 +485,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
     setError(null);
     try {
       speechRef.current.stop();
+      setActiveSpeakingTurn(null);
       const endedSession = await api.endSession(session.id);
       setSession(endedSession);
       setState("idle");
@@ -452,60 +498,63 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const isSessionEnded = session.status === "ended" || session.status === "abandoned";
   const interviewerName = scenario.definition.persona.name;
   const personas = scenario.definition.personas ?? [];
+  const latestTurn = turns.length > 0 ? turns[turns.length - 1] : null;
 
   return (
-    <div className="flex flex-col space-y-4 pb-6">
-      {/* Session Top Bar: Japanese Washi & Hanko Aesthetic */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-washi-300 bg-white/95 p-4 shadow-sm backdrop-blur-sm">
-        <div>
-          <div className="flex items-center gap-2">
+    <div className="h-full min-h-[100dvh] max-h-[100dvh] flex flex-col justify-between overflow-hidden bg-washi-100 p-2 sm:p-4 select-none space-y-2">
+      {/* Minimalist Top Floating Toolbar */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/95 border border-washi-300 shadow-xs backdrop-blur-sm">
+        {/* Left: Back/Exit Button */}
+        <button
+          type="button"
+          onClick={onBackToScenarios}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-sumi-600 hover:text-sumi-900 focus:outline-none transition-colors"
+          aria-label="Exit session"
+        >
+          <span>&larr;</span>
+          <span className="hidden sm:inline">Back</span>
+        </button>
+
+        {/* Center: Scenario Info & Turns */}
+        <div className="text-center truncate px-2">
+          <div className="flex items-center justify-center gap-1.5">
             <span
-              className={`h-2.5 w-2.5 rounded-full ${
+              className={`h-2 w-2 rounded-full ${
                 isSessionEnded ? "bg-sumi-400" : "bg-matcha-600 animate-pulse"
               }`}
             />
-            <h2 className="text-base font-bold text-sumi-900 tracking-tight">
+            <h2 className="text-xs sm:text-sm font-bold text-sumi-900 truncate">
               {scenario.title}
             </h2>
-            <span className="rounded-md bg-washi-200 border border-washi-300 px-2 py-0.5 text-xs font-semibold text-sumi-700">
-              {session.status.toUpperCase()}
+            <span className="text-[11px] font-semibold text-ai-700 bg-ai-50 px-2 py-0.2 rounded border border-ai-200">
+              Turns: {session.turn_count}/{session.max_turns}
             </span>
           </div>
-          <p className="text-xs text-sumi-600 mt-1 font-medium">
+          <p className="text-[11px] text-sumi-500 truncate hidden sm:block">
             {personas.length === 2 ? (
               <>
                 Panel:{" "}
-                {personas.map((persona, index) => (
-                  <React.Fragment key={persona.id}>
-                    {index > 0 ? " and " : ""}
-                    <span className="font-semibold text-ai-700">
-                      {persona.name}
-                    </span>{" "}
-                    ({persona.role_title})
-                  </React.Fragment>
+                {personas.map((p, idx) => (
+                  <span key={p.id}>
+                    {idx > 0 ? " & " : ""}
+                    <span className="font-semibold text-sumi-700">{p.name}</span>
+                  </span>
                 ))}
               </>
             ) : (
-              <>
-                Interviewer:{" "}
-                <span className="font-semibold text-ai-700">{interviewerName}</span>{" "}
-                ({scenario.definition.persona.role})
-              </>
+              <span>Interviewer: {interviewerName}</span>
             )}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-ai-50 px-3 py-1.5 text-xs font-semibold text-ai-800 border border-ai-200">
-            Turns: {session.turn_count} / {session.max_turns}
-          </div>
-
+        {/* Right: End Session or View Feedback */}
+        <div>
           {!isSessionEnded ? (
             <button
               type="button"
               onClick={handleEndSession}
               disabled={state === "recording" || state === "sending"}
-              className="rounded-lg border border-shu-300 bg-shu-50 px-3.5 py-1.5 text-xs font-semibold text-shu-700 hover:bg-shu-100 focus:outline-none disabled:opacity-50 transition-colors shadow-sm"
+              className="rounded-lg border border-shu-300 bg-shu-50 px-3 py-1 text-xs font-semibold text-shu-700 hover:bg-shu-100 focus:outline-none disabled:opacity-50 transition-colors shadow-2xs"
             >
               End Session
             </button>
@@ -513,9 +562,9 @@ export const SessionView: React.FC<SessionViewProps> = ({
             <button
               type="button"
               onClick={() => onViewFeedback(session.id)}
-              className="rounded-lg bg-ai-700 px-4 py-1.5 text-xs font-semibold text-white shadow hover:bg-ai-800 focus:outline-none transition-all"
+              className="rounded-lg bg-ai-700 px-3 py-1 text-xs font-semibold text-white shadow-2xs hover:bg-ai-800 focus:outline-none transition-all"
             >
-              View Feedback &rarr;
+              Feedback &rarr;
             </button>
           )}
         </div>
@@ -523,24 +572,24 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
       <ErrorAlert error={error} onDismiss={() => setError(null)} />
 
-      {/* Session Completed Banner */}
+      {/* Session Completed Banner if Ended */}
       {isSessionEnded && (
-        <div className="rounded-2xl border-2 border-ai-300 bg-ai-50/90 p-5 text-center shadow-md backdrop-blur-sm">
-          <h3 className="text-lg font-bold text-ai-900">
+        <div className="rounded-2xl border border-ai-300 bg-ai-50/95 p-4 text-center shadow-md backdrop-blur-sm">
+          <h3 className="text-base font-bold text-ai-900">
             Practice Session Completed!
           </h3>
-          <p className="mt-1 text-sm text-ai-800">
+          <p className="mt-1 text-xs text-ai-800">
             End reason:{" "}
             <span className="font-semibold uppercase">
               {session.end_reason ?? "Completed"}
             </span>
-            . You can now view detailed Coach feedback and delivery metrics.
+            . You can now view detailed Coach evaluation and metrics.
           </p>
-          <div className="mt-4">
+          <div className="mt-3">
             <button
               type="button"
               onClick={() => onViewFeedback(session.id)}
-              className="rounded-xl bg-ai-700 px-6 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-ai-800 focus:outline-none transition-all"
+              className="rounded-xl bg-ai-700 px-5 py-2 text-xs sm:text-sm font-semibold text-white shadow hover:bg-ai-800 focus:outline-none transition-all"
             >
               View Coach Evaluation &amp; Metrics &rarr;
             </button>
@@ -548,55 +597,19 @@ export const SessionView: React.FC<SessionViewProps> = ({
         </div>
       )}
 
-      {/* Interactive Japanese Vector Stage (Visual Novel Central Stage) */}
+      {/* Sân Khấu 2 Nhân Vật Chiếm ~75–80% Màn Hình */}
       <RoleplayStage
         scenario={scenario}
-        turns={turns}
+        latestTurn={latestTurn}
+        activeSpeakingTurn={activeSpeakingTurn}
         state={state}
         volume={audioReactor.volume}
         onReplayTurn={handleReplayTurn}
-        onToggleTranscriptDrawer={() => setIsDrawerOpen((prev) => !prev)}
-        isDrawerOpen={isDrawerOpen}
       />
 
-      {/* Transcript History Drawer / Scroll (Always rendered in DOM for testing & complete inspection) */}
-      <div
-        className={`transition-all duration-300 ease-in-out ${
-          isDrawerOpen ? "block" : "hidden sm:block"
-        }`}
-      >
-        <div className="rounded-2xl border border-washi-300 bg-white p-4 shadow-sm space-y-2">
-          <div className="flex items-center justify-between border-b border-washi-200 pb-2">
-            <div className="flex items-center gap-2">
-              <span className="hanko-stamp-filled flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold">
-                録
-              </span>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-sumi-800">
-                Dialogue Transcript History ({turns.length} turns)
-              </h4>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsDrawerOpen(false)}
-              className="text-xs text-sumi-400 hover:text-sumi-700 focus:outline-none sm:hidden"
-            >
-              Hide Drawer ▲
-            </button>
-          </div>
-
-          <TurnList
-            turns={turns}
-            interviewerName={interviewerName}
-            personas={scenario.definition.personas}
-            onReplayTurn={handleReplayTurn}
-            isSpeaking={state === "speaking"}
-          />
-        </div>
-      </div>
-
-      {/* Bottom Interaction Controls: Mobile-First Ergonomics */}
+      {/* Bottom Mobile-First Controls Area */}
       {!isSessionEnded && (
-        <div className="rounded-2xl border border-washi-300 bg-white/95 p-4 sm:p-5 shadow-lg backdrop-blur-sm space-y-4">
+        <div className="rounded-2xl border border-washi-300 bg-white/95 p-3 sm:p-4 shadow-md backdrop-blur-sm space-y-3">
           {/* Review Transcript Stage (No Auto-Send) */}
           {state === "review" && (
             <TranscriptReview
@@ -610,9 +623,9 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
           {/* Transcribing loader */}
           {state === "transcribing" && (
-            <div className="flex items-center justify-center gap-3 p-4 text-sm font-semibold text-ai-700 bg-ai-50 rounded-xl border border-ai-200">
+            <div className="flex items-center justify-center gap-3 p-3 text-xs sm:text-sm font-semibold text-ai-700 bg-ai-50 rounded-xl border border-ai-200">
               <svg
-                className="h-5 w-5 animate-spin text-ai-700"
+                className="h-4 w-4 animate-spin text-ai-700"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
@@ -631,13 +644,13 @@ export const SessionView: React.FC<SessionViewProps> = ({
                   d="M4 12a8 8 0 018-8v8z"
                 />
               </svg>
-              <span>Transcribing your speech with AI speech engine...</span>
+              <span>Transcribing your speech...</span>
             </div>
           )}
 
-          {/* Mobile-First PTT Audio Controller */}
+          {/* Main Controls: Mic Button & Keyboard Toggle Button */}
           {state !== "review" && (
-            <div className="pt-2 pb-1">
+            <div className="relative flex items-center justify-center">
               <PushToTalkButton
                 state={state}
                 mode={mode}
@@ -652,23 +665,34 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 onMuteSpeaker={handleMuteSpeaker}
                 volume={audioReactor.volume}
               />
-            </div>
-          )}
 
-          {/* Fallback keyboard toggle & input */}
-          <div className="border-t border-washi-200 pt-3">
-            <div className="flex items-center justify-between mb-2">
+              {/* Small Keyboard Toggle Icon Button beside Mic */}
               <button
                 type="button"
                 onClick={() => setShowKeyboardFallback((prev) => !prev)}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-sumi-600 hover:text-ai-700 transition-colors focus:outline-none"
+                className={`absolute right-2 sm:right-6 bottom-2 p-2.5 rounded-full border transition-all ${
+                  showKeyboardFallback || isMicDenied
+                    ? "bg-ai-700 text-white border-ai-700 shadow-sm"
+                    : "bg-washi-100 text-sumi-600 border-washi-300 hover:bg-white"
+                }`}
+                aria-label="Toggle keyboard input"
+                title="Toggle keyboard input"
               >
-                <span>⌨️</span>
-                <span>{showKeyboardFallback ? "Hide Keyboard Input" : "Show Keyboard Input"}</span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M3 10h18M3 14h18m-9-4v8m-4-8v8m8-8v8M5 6h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z"
+                  />
+                </svg>
               </button>
             </div>
+          )}
 
-            {showKeyboardFallback && (
+          {/* Optional Collapsed Keyboard Input Fallback */}
+          {(showKeyboardFallback || isMicDenied) && (
+            <div className="pt-2 border-t border-washi-200">
               <TypedInputFallback
                 isMicDenied={isMicDenied}
                 isServerSttUnavailable={isServerSttUnavailable}
@@ -681,8 +705,8 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 isSending={state === "sending"}
                 onSendTyped={handleSendTyped}
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -693,5 +717,10 @@ function speechItemForTurn(turn: TurnOut, scenario: ScenarioOut): SpeechSequence
   const persona = (scenario.definition.personas ?? []).find(
     (panelPersona) => panelPersona.id === turn.speaker_id,
   );
-  return { text: cleanSpeakerTag(turn.text), voiceGender: persona?.voice_gender };
+  return {
+    text: cleanSpeakerTag(turn.text),
+    voiceGender: persona?.voice_gender,
+    speakerId: turn.speaker_id ?? undefined,
+    turn: turn,
+  };
 }

@@ -42,6 +42,11 @@ describe("EchoRole App Integration", () => {
       ).toBeInTheDocument();
     });
 
+    // Toggle keyboard input open
+    fireEvent.click(
+      screen.getByRole("button", { name: /toggle keyboard input/i }),
+    );
+
     // Wait until speech finishes and typed input is enabled
     const typedInput = screen.getByLabelText(/or type response/i);
     await waitFor(() => {

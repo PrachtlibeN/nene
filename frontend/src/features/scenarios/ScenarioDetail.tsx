@@ -18,9 +18,9 @@ export const ScenarioDetail: React.FC<ScenarioDetailProps> = ({
   const panelPersonas = personas ?? [];
 
   const difficultyLabels: Record<number, { text: string; color: string }> = {
-    1: { text: "初級 Level 1: Beginner", color: "bg-matcha-100 text-matcha-800 border-matcha-300" },
-    2: { text: "中級 Level 2: Intermediate", color: "bg-yamabuki-100 text-yamabuki-800 border-yamabuki-300" },
-    3: { text: "上級 Level 3: Advanced", color: "bg-shu-100 text-shu-800 border-shu-300" },
+    1: { text: "Level 1: Beginner", color: "bg-matcha-100 text-matcha-800 border-matcha-300" },
+    2: { text: "Level 2: Intermediate", color: "bg-yamabuki-100 text-yamabuki-800 border-yamabuki-300" },
+    3: { text: "Level 3: Advanced", color: "bg-shu-100 text-shu-800 border-shu-300" },
   };
 
   const difficultyInfo = difficultyLabels[scenario.difficulty] ?? {
@@ -67,14 +67,9 @@ export const ScenarioDetail: React.FC<ScenarioDetailProps> = ({
         {panelPersonas.length === 2 ? (
           <section className="rounded-xl border border-ai-200 bg-ai-50/60 p-5 md:col-span-2 shadow-xs">
             <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="hanko-stamp-filled flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold">
-                  団
-                </span>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-ai-900">
-                  2-on-1 Panel
-                </h3>
-              </div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-ai-900">
+                2-on-1 Panel
+              </h3>
               <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-ai-700 border border-ai-200 shadow-2xs">
                 Two AI interviewers
               </span>

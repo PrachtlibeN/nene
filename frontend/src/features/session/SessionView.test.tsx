@@ -31,14 +31,16 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
 
     expect(screen.getByText("Behavioral Job Interview")).toBeInTheDocument();
     expect(screen.getByText(/Panel:/)).toBeInTheDocument();
-    expect(screen.getByText("Alex")).toBeInTheDocument();
-    expect(screen.getByText("Sarah")).toBeInTheDocument();
-    expect(
-      screen.getByText("Tell me about a project you led under a tight deadline."),
-    ).toBeInTheDocument();
+    expect(screen.getAllByText("Alex").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Sarah").length).toBeGreaterThanOrEqual(1);
     expect(
       screen.getByText("Welcome. We will discuss how you led a project under pressure."),
     ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByText("Tell me about a project you led under a tight deadline."),
+      ).toBeInTheDocument();
+    });
     expect(
       screen.getByRole("button", { name: /push to talk|microphone locked/i }),
     ).toBeInTheDocument();
@@ -68,6 +70,11 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
         initialTurn={null}
         onViewFeedback={vi.fn()}
       />,
+    );
+
+    // Toggle keyboard input open
+    fireEvent.click(
+      screen.getByRole("button", { name: /toggle keyboard input/i }),
     );
 
     const input = screen.getByPlaceholderText(/type your answer here/i);
@@ -138,11 +145,8 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
     const sendAnswerBtn = screen.getByRole("button", { name: /send answer/i });
     fireEvent.click(sendAnswerBtn);
 
-    // Verifies candidate turn and interviewer reply are shown
+    // Verifies interviewer reply is shown in subtitle
     await waitFor(() => {
-      expect(
-        screen.getByText("In my last role I led a migration."),
-      ).toBeInTheDocument();
       expect(
         screen.getByText("What was the measurable outcome?"),
       ).toBeInTheDocument();
@@ -166,6 +170,11 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
         onViewFeedback={vi.fn()}
         onMockRecordAudio={mockRecordAudio}
       />,
+    );
+
+    // Toggle keyboard input open
+    fireEvent.click(
+      screen.getByRole("button", { name: /toggle keyboard input/i }),
     );
 
     fireEvent.click(screen.getByRole("button", { name: /click to toggle/i }));

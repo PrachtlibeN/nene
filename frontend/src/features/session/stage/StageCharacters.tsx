@@ -53,9 +53,7 @@ export const StageCharacter: React.FC<StageCharacterProps> = ({
           ) : (
             <span className="h-1.5 w-1.5 rounded-full bg-sumi-400" />
           )}
-          <span>
-            AI #{panelIndex + 1}: {persona.name}
-          </span>
+          <span>{persona.name}</span>
           <span className="text-[10px] opacity-80 font-normal hidden sm:inline">
             &bull; {persona.role_title}
           </span>
@@ -63,10 +61,10 @@ export const StageCharacter: React.FC<StageCharacterProps> = ({
       </div>
 
       {/* SVG Character Model with Animated Layers */}
-      <div className="relative w-40 h-52 sm:w-48 sm:h-64 flex items-end justify-center">
-        {/* Hamon (Ripple Waves) expanding from base when speaking */}
+      <div className="relative w-44 h-56 sm:w-56 sm:h-72 md:w-64 md:h-80 flex items-end justify-center">
+        {/* Ripple Waves expanding from base when speaking */}
         {isActiveSpeaker && (
-          <div className="absolute -bottom-4 w-44 h-16 pointer-events-none flex items-center justify-center">
+          <div className="absolute -bottom-4 w-48 sm:w-60 h-16 pointer-events-none flex items-center justify-center">
             <div className="absolute inset-0 rounded-[100%] border-2 border-ai-500 animate-hamon-1 opacity-70" />
             <div className="absolute inset-0 rounded-[100%] border border-ai-400 animate-hamon-2 opacity-50" />
             <div className="absolute inset-0 rounded-[100%] border border-shu-500 animate-hamon-3 opacity-30" />

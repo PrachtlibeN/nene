@@ -43,14 +43,9 @@ export const DeliveryMetricsPanel: React.FC<DeliveryMetricsPanelProps> = ({
       className="rounded-2xl border-2 border-washi-300 bg-white p-5 sm:p-7 shadow-md space-y-6"
     >
       <div className="border-b border-washi-200 pb-4">
-        <div className="flex items-center gap-2">
-          <span className="hanko-stamp-filled flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold">
-            測
-          </span>
-          <span className="text-xs font-bold uppercase tracking-wider text-sumi-600">
-            Panel 2: Delivery &amp; Speech Metrics
-          </span>
-        </div>
+        <span className="text-xs font-bold uppercase tracking-wider text-sumi-600 block">
+          Panel 2: Delivery &amp; Speech Metrics
+        </span>
         <h2 className="text-xl font-bold text-sumi-900 mt-1 tracking-tight">
           Pacing &amp; Speaking Analysis
         </h2>
@@ -151,9 +146,8 @@ export const DeliveryMetricsPanel: React.FC<DeliveryMetricsPanelProps> = ({
 
       {/* Filler Words Breakdown Chips */}
       <div>
-        <h4 className="text-xs font-bold uppercase tracking-wider text-sumi-700 mb-2 flex items-center gap-1.5">
-          <span>内訳</span>
-          <span>Filler Word Breakdown</span>
+        <h4 className="text-xs font-bold uppercase tracking-wider text-sumi-700 mb-2">
+          Filler Word Breakdown
         </h4>
         {fillerEntries.length > 0 ? (
           <div className="flex flex-wrap gap-2">
