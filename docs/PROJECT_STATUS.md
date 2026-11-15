@@ -29,6 +29,7 @@ EchoRole là ứng dụng luyện phỏng vấn và giao tiếp theo kịch bả
 
 - **Nhánh hiện tại:** `main`.
 - **Các commit nâng cấp tiêu biểu:**
+  - `99cf906`: *fix(tts): prioritize local audio voices, add direct audio test button, and prevent utterance stalls*
   - `99c6d7e`: *fix(speech): eliminate silent TTS dropouts, prevent Chromium GC and cancel cascading, and bind Groq Whisper STT in backend lifespan*
   - `7b86646`: *fix(stt): normalize Groq Whisper endpoint URLs and strip whitespace from STT config*
   - `9196b99`: *fix(audio): eliminate empty utterance collisions, support GROQ_API_KEY alias, and ensure smooth speech recognition fallback*
