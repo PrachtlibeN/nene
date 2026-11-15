@@ -31,7 +31,8 @@ def get_speech_status(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> SpeechStatusOut:
     app_settings = getattr(request.app.state, "settings", settings)
-    status_info = engine.status()
+    actual_engine = getattr(request.app.state, "speech_engine", None) or engine
+    status_info = actual_engine.status()
     stt_status_val = str(status_info.get("status", "loading"))
     if stt_status_val not in ("ready", "loading", "unavailable"):
         stt_status_val = "loading"
@@ -73,6 +74,7 @@ async def transcribe_speech(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> TranscriptionOut:
     app_settings = getattr(request.app.state, "settings", settings)
+    actual_engine = getattr(request.app.state, "speech_engine", None) or engine
     form = await request.form()
     form_keys = set(form.keys())
     if form_keys != {"audio"} or len(form.getlist("audio")) != 1:
@@ -83,7 +85,7 @@ async def transcribe_speech(
             details={"received_parts": list(form_keys)},
         )
 
-    status_info = engine.status()
+    status_info = actual_engine.status()
     if status_info.get("status") == "unavailable":
         detail_msg = status_info.get("detail") or "faster-whisper is not installed"
         raise AppError(
@@ -127,7 +129,7 @@ async def transcribe_speech(
             422,
         )
 
-    transcription = engine.transcribe(audio_bytes, content_type)
+    transcription = actual_engine.transcribe(audio_bytes, content_type)
 
     return TranscriptionOut(
         text=transcription.text,

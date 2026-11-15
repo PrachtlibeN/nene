@@ -404,10 +404,17 @@ def test_groq_whisper_engine_status_and_transcribe() -> None:
 
 
 def test_groq_whisper_engine_unconfigured() -> None:
-    settings = Settings(STT_API_KEY="")
+    settings = Settings(STT_API_KEY="", OPENAI_API_KEY="")
     assert settings.is_stt_configured is False
     engine = GroqWhisperEngine(settings=settings)
     assert engine.status()["status"] == "unavailable"
+
+
+def test_groq_whisper_engine_fallback_to_groq_openai_key() -> None:
+    settings = Settings(STT_API_KEY="", OPENAI_API_KEY="gsk_openai_compatible_groq_key")
+    assert settings.is_stt_configured is True
+    engine = GroqWhisperEngine(settings=settings)
+    assert engine.status()["status"] == "ready"
 
 
 def test_groq_whisper_engine_with_groq_api_key_alias() -> None:

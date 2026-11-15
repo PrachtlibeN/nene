@@ -126,7 +126,17 @@ class Settings(BaseSettings):
 
     @property
     def is_stt_configured(self) -> bool:
-        return bool(self.stt_api_key.get_secret_value().strip())
+        return bool(self.effective_stt_api_key)
+
+    @property
+    def effective_stt_api_key(self) -> str:
+        key = self.stt_api_key.get_secret_value().strip()
+        if key:
+            return key
+        openai_key = self.openai_api_key.get_secret_value().strip()
+        if openai_key.startswith("gsk_") or "groq.com" in self.openai_base_url.lower():
+            return openai_key
+        return ""
 
     @field_validator("ollama_model", "openai_model", "stt_model", "stt_base_url")
     @classmethod

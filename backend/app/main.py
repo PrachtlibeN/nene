@@ -21,6 +21,7 @@ from app.llm.interfaces import LLMClient
 from app.roleplay.agent import RoleplayAgent
 from app.simulation.router import router as simulation_router
 from app.speech.router import router as speech_router
+from app.speech.stt import get_speech_engine
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -61,6 +62,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if owns_evaluation_coach:
             application.state.evaluation_coach = EvaluationCoach(cast(LLMClient, llm_client))
 
+        owns_speech_engine = getattr(application.state, "speech_engine", None) is None
+        if owns_speech_engine:
+            application.state.speech_engine = get_speech_engine(app_settings)
+
         try:
             yield
         finally:
@@ -68,12 +73,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 engine.dispose()
             if owns_llm_client:
                 cast(OllamaClient | OpenAICompatibleClient, llm_client).close()
+            if owns_speech_engine:
+                engine_to_close = getattr(application.state, "speech_engine", None)
+                if engine_to_close and hasattr(engine_to_close, "close"):
+                    engine_to_close.close()
             for name, owned in (
                 ("db_engine", owns_engine),
                 ("db_session_factory", owns_session_factory),
                 ("llm_client", owns_llm_client),
                 ("roleplay_agent", owns_roleplay_agent),
                 ("evaluation_coach", owns_evaluation_coach),
+                ("speech_engine", owns_speech_engine),
             ):
                 if owned and hasattr(application.state, name):
                     delattr(application.state, name)

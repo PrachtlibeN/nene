@@ -322,7 +322,7 @@ class GroqWhisperEngine:
         client: httpx.Client | None = None,
     ) -> None:
         self._settings = settings or get_settings()
-        self._api_key = self._settings.stt_api_key.get_secret_value().strip()
+        self._api_key = self._settings.effective_stt_api_key
         self._base_url = self._settings.stt_base_url.rstrip("/")
         self.model_name = self._settings.stt_model or "whisper-large-v3-turbo"
         self._client = client or httpx.Client(timeout=30.0)
@@ -377,10 +377,10 @@ class GroqWhisperEngine:
         filename = f"audio.{ext}"
 
         base = self._base_url.rstrip("/")
-        if base.endswith("/audio/transcriptions"):
+        if "groq.com" in base.lower():
+            url = "https://api.groq.com/openai/v1/audio/transcriptions"
+        elif base.endswith("/audio/transcriptions"):
             url = base
-        elif base in ("https://api.groq.com", "http://api.groq.com"):
-            url = f"{base}/openai/v1/audio/transcriptions"
         else:
             url = f"{base}/audio/transcriptions"
         headers = {"Authorization": f"Bearer {self._api_key}"}
@@ -516,22 +516,17 @@ _engine_lock = threading.Lock()
 
 def get_speech_engine(settings: Settings | None = None) -> SpeechEngine:
     global _engine_instance
-    current_settings = settings or get_settings()
-    if _engine_instance is None or (
-        current_settings.is_stt_configured
-        and not isinstance(_engine_instance, (GroqWhisperEngine, FakeSpeechEngine))
-    ):
+    if _engine_instance is None:
         with _engine_lock:
-            if _engine_instance is None or (
-                current_settings.is_stt_configured
-                and not isinstance(_engine_instance, (GroqWhisperEngine, FakeSpeechEngine))
-            ):
+            if _engine_instance is None:
                 if os.environ.get("PYTEST_CURRENT_TEST"):
                     _engine_instance = FakeSpeechEngine()
-                elif current_settings.is_stt_configured:
-                    _engine_instance = GroqWhisperEngine(current_settings)
                 else:
-                    _engine_instance = FasterWhisperEngine()
+                    current_settings = settings or get_settings()
+                    if current_settings.is_stt_configured:
+                        _engine_instance = GroqWhisperEngine(current_settings)
+                    else:
+                        _engine_instance = FasterWhisperEngine()
     return _engine_instance
 
 

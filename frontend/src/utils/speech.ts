@@ -403,16 +403,36 @@ export function createSpeechRecognitionController(
   };
 }
 
+// Global reference set to protect active SpeechSynthesisUtterance objects from Chromium V8 garbage collection
+const activeUtterances: Set<SpeechSynthesisUtterance> = new Set();
+
 /**
- * Ensures speech synthesis engine is active and unpaused.
- * Calls resume() on SpeechSynthesis to clear any paused/dormant states
- * across browsers without dispatching problematic empty utterances.
+ * Primes and unlocks browser audio and speech synthesis during user gesture.
+ * Safari, Chrome and mobile browsers strictly require a user gesture (click/tap)
+ * before allowing any audio or speech synthesis playback.
  */
 export function unlockSpeechAudio(): void {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  if (typeof window === "undefined") return;
+
   try {
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
+    const AudioCtxClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (AudioCtxClass) {
+      const ctx = new AudioCtxClass();
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    if ("speechSynthesis" in window) {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
     }
   } catch {
     // ignore
@@ -516,6 +536,7 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
   const stop = (): void => {
     activeSequenceId += 1;
     clearTimers();
+    activeUtterances.clear();
     if (isSupported()) {
       try {
         window.speechSynthesis.cancel();
@@ -623,7 +644,7 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         window.speechSynthesis.resume();
       }
 
-      // Split items into smaller sentence chunks to avoid browser synthesis speech dropouts
+      // Speak each dialogue turn as a coherent natural utterance, avoiding micro-sentence dropping
       interface FlattenedChunk {
         text: string;
         item: SpeechSequenceItem;
@@ -633,14 +654,11 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
 
       const chunks: FlattenedChunk[] = [];
       validItems.forEach((item, itemIdx) => {
-        const sentences = splitTextIntoSentences(item.text);
-        sentences.forEach((sentence, sIdx) => {
-          chunks.push({
-            text: sentence,
-            item,
-            isFirstChunkOfItem: sIdx === 0,
-            itemIndex: itemIdx,
-          });
+        chunks.push({
+          text: item.text.trim(),
+          item,
+          isFirstChunkOfItem: true,
+          itemIndex: itemIdx,
         });
       });
 
@@ -688,29 +706,32 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         const voice = voiceForGender(currentChunk.item.voiceGender, accent);
         if (voice) utterance.voice = voice;
 
+        // Prevent Chromium GC bug by holding a live reference until completion
+        activeUtterances.add(utterance);
+
         let finished = false;
-        let retrySwallowTimer: ReturnType<typeof setTimeout> | null = null;
 
         const handleDone = () => {
           if (finished) return;
           finished = true;
-          if (retrySwallowTimer) {
-            clearTimeout(retrySwallowTimer);
-            retrySwallowTimer = null;
-          }
+          activeUtterances.delete(utterance);
           if (watchdogTimer) {
             clearTimeout(watchdogTimer);
             watchdogTimer = null;
           }
           if (sequenceId !== activeSequenceId) return;
           chunkIndex += 1;
-          speakNextChunk();
+          setTimeout(() => {
+            if (sequenceId === activeSequenceId) {
+              speakNextChunk();
+            }
+          }, 40);
         };
 
-        // Watchdog timeout based on sentence length to prevent synthesis hangs
+        // Watchdog timeout based on dialogue length to prevent synthesis hangs
         const estimatedMs = Math.max(
-          3000,
-          Math.min(15000, currentChunk.text.length * 90 + 2500),
+          4000,
+          Math.min(30000, currentChunk.text.length * 80 + 3000),
         );
         watchdogTimer = setTimeout(() => {
           try {
@@ -726,7 +747,15 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         }, estimatedMs);
 
         utterance.onend = handleDone;
-        utterance.onerror = handleDone;
+        utterance.onerror = (e) => {
+          if (e.error === "canceled" || e.error === "interrupted") {
+            finished = true;
+            activeUtterances.delete(utterance);
+            return;
+          }
+          console.warn("SpeechSynthesis utterance error:", e);
+          handleDone();
+        };
 
         // Unpause if synthesis is paused
         try {
@@ -755,28 +784,6 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         } catch {
           // ignore
         }
-
-        // Fallback watchdog: If browser swallowed the utterance, resume and re-dispatch speak once
-        retrySwallowTimer = setTimeout(() => {
-          retrySwallowTimer = null;
-          if (finished || sequenceId !== activeSequenceId) return;
-          try {
-            if (
-              typeof window !== "undefined" &&
-              window.speechSynthesis
-            ) {
-              if (window.speechSynthesis.paused) {
-                window.speechSynthesis.resume();
-              }
-              if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-                window.speechSynthesis.resume();
-                window.speechSynthesis.speak(utterance);
-              }
-            }
-          } catch {
-            // ignore
-          }
-        }, 250);
       };
 
       if (isSpeakingOrPending) {

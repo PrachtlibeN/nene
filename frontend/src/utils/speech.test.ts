@@ -58,7 +58,7 @@ describe("SpeechSynthesisController", () => {
     expect(utterances[1]?.voice).toBe(femaleVoice);
 
     utterances[1]?.onend?.(new Event("end") as SpeechSynthesisEvent);
-    expect(onEnd).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(onEnd).toHaveBeenCalledOnce());
   });
 
   it("unlockSpeechAudio unpauses speechSynthesis to ensure audio is ready", () => {

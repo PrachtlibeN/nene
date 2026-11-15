@@ -116,10 +116,52 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const pttRecognitionControllerRef = useRef<SpeechRecognitionController | null>(null);
   const recordingStartTimeRef = useRef<number | null>(null);
 
+  const openingTurnsRef = useRef(openingTurns);
+  openingTurnsRef.current = openingTurns;
+  const scenarioRef = useRef(scenario);
+  scenarioRef.current = scenario;
+  const accentRef = useRef(accent);
+  accentRef.current = accent;
+
   // Fetch speech status and health on mount to detect server STT readiness immediately
   useEffect(() => {
     let mounted = true;
     unlockSpeechAudio();
+
+    // Global gesture capture: keeps speech synthesis active across browser interaction
+    const handleGesture = () => {
+      unlockSpeechAudio();
+      // If browser autoplay policy blocked initial greeting on mount, play opening turns upon first user gesture
+      if (spokenTurnIdsRef.current.size === 0) {
+        const unplayed = openingTurnsRef.current.filter((turn) => turn.speaker === "interviewer");
+        if (unplayed.length > 0) {
+          setState("speaking");
+          setActiveSpeakingTurn(unplayed[0]);
+          speechRef.current.speakSequence(
+            unplayed.map((turn) => speechItemForTurn(turn, scenarioRef.current)),
+            () => {
+              setState("idle");
+              setActiveSpeakingTurn(null);
+            },
+            () => {
+              setState("idle");
+              setActiveSpeakingTurn(null);
+            },
+            (item) => {
+              if (item.turn) {
+                setActiveSpeakingTurn(item.turn);
+                const turnKey = item.turn.id || `${item.turn.idx}-${item.turn.speaker}-${item.turn.text.slice(0, 25)}`;
+                spokenTurnIdsRef.current.add(turnKey);
+              }
+            },
+            accentRef.current,
+          );
+        }
+      }
+    };
+    window.addEventListener("click", handleGesture, { capture: true });
+    window.addEventListener("touchstart", handleGesture, { capture: true });
+
     Promise.allSettled([api.getSpeechStatus(), api.getHealth()])
       .then(([speechResult, healthResult]) => {
         if (!mounted) return;
@@ -149,6 +191,8 @@ export const SessionView: React.FC<SessionViewProps> = ({
     const speech = speechRef.current;
     return () => {
       mounted = false;
+      window.removeEventListener("click", handleGesture, { capture: true });
+      window.removeEventListener("touchstart", handleGesture, { capture: true });
       cancelSpeech();
       if (timerRef.current) clearInterval(timerRef.current);
       if (stopFlushTimeoutRef.current) {
@@ -176,9 +220,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
     const unplayedOpeningTurns = openingTurns.filter((turn) => {
       if (turn.speaker !== "interviewer") return false;
       const turnKey = turn.id || `${turn.idx}-${turn.speaker}-${turn.text.slice(0, 25)}`;
-      if (spokenTurnIdsRef.current.has(turnKey)) return false;
-      spokenTurnIdsRef.current.add(turnKey);
-      return true;
+      return !spokenTurnIdsRef.current.has(turnKey);
     });
 
     if (unplayedOpeningTurns.length > 0) {
@@ -195,7 +237,11 @@ export const SessionView: React.FC<SessionViewProps> = ({
           setActiveSpeakingTurn(null);
         },
         (item) => {
-          if (item.turn) setActiveSpeakingTurn(item.turn);
+          if (item.turn) {
+            setActiveSpeakingTurn(item.turn);
+            const turnKey = item.turn.id || `${item.turn.idx}-${item.turn.speaker}-${item.turn.text.slice(0, 25)}`;
+            spokenTurnIdsRef.current.add(turnKey);
+          }
         },
         accent,
       );
@@ -502,9 +548,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       const unplayedInterviewerTurns = interviewerTurns.filter((turn) => {
         if (!turn.text) return false;
         const turnKey = turn.id || `${turn.idx}-${turn.speaker}-${turn.text.slice(0, 25)}`;
-        if (spokenTurnIdsRef.current.has(turnKey)) return false;
-        spokenTurnIdsRef.current.add(turnKey);
-        return true;
+        return !spokenTurnIdsRef.current.has(turnKey);
       });
 
       if (unplayedInterviewerTurns.length > 0) {
@@ -527,7 +571,11 @@ export const SessionView: React.FC<SessionViewProps> = ({
             }
           },
           (item) => {
-            if (item.turn) setActiveSpeakingTurn(item.turn);
+            if (item.turn) {
+              setActiveSpeakingTurn(item.turn);
+              const turnKey = item.turn.id || `${item.turn.idx}-${item.turn.speaker}-${item.turn.text.slice(0, 25)}`;
+              spokenTurnIdsRef.current.add(turnKey);
+            }
           },
           accent,
         );
