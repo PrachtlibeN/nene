@@ -24,7 +24,7 @@ import { PushToTalkButton } from "./PushToTalkButton";
 import { RoleplayStage } from "./RoleplayStage";
 import { TranscriptReview } from "./TranscriptReview";
 import { TypedInputFallback } from "./TypedInputFallback";
-import type { InteractionMode, PushToTalkState } from "./types";
+import type { PushToTalkState } from "./types";
 import { useAudioReactor } from "./useAudioReactor";
 
 const EMPTY_TURNS: TurnOut[] = [];
@@ -65,7 +65,6 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const [activeSpeakingTurn, setActiveSpeakingTurn] = useState<TurnOut | null>(
     openingTurns.find((turn) => turn.speaker === "interviewer") ?? null,
   );
-  const [mode, setMode] = useState<InteractionMode>("hold");
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const [maxAudioSeconds, setMaxAudioSeconds] = useState<number>(120);
 
@@ -114,6 +113,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   const spokenTurnIdsRef = useRef<Set<string>>(new Set());
   const webSpeechTranscriptRef = useRef<string>("");
   const pttRecognitionControllerRef = useRef<SpeechRecognitionController | null>(null);
+  const recordingStartTimeRef = useRef<number | null>(null);
 
   // Fetch speech status and health on mount to detect server STT readiness immediately
   useEffect(() => {
@@ -227,6 +227,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
     // If a mock audio recorder hook is provided (for tests)
     if (onMockRecordAudio) {
+      recordingStartTimeRef.current = Date.now();
       setState("recording");
       setRecordingSeconds(0);
       startTimer();
@@ -235,6 +236,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
     // If server STT is unavailable and browser supports Web Speech API
     if (isServerSttUnavailable && isSpeechRecognitionSupported()) {
+      recordingStartTimeRef.current = Date.now();
       webSpeechTranscriptRef.current = "";
       setInterimTranscript("");
       if (!pttRecognitionControllerRef.current) {
@@ -319,6 +321,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       };
 
       mediaRecorderRef.current = recorder;
+      recordingStartTimeRef.current = Date.now();
       recorder.start();
       setState("recording");
       setRecordingSeconds(0);
@@ -380,9 +383,17 @@ export const SessionView: React.FC<SessionViewProps> = ({
           setInterimTranscript("");
           if (transcript.length > 0) {
             setReviewText(transcript);
+            const elapsedMs = recordingStartTimeRef.current
+              ? Math.max(1000, Date.now() - recordingStartTimeRef.current)
+              : Math.max(1000, recordingSeconds * 1000);
+            const words = transcript.split(/\s+/).filter(Boolean);
+            const durationMs = Math.max(
+              elapsedMs,
+              Math.round((words.length / 140) * 60 * 1000),
+            );
             setReviewSpeechMeta({
-              duration_ms: recordingSeconds * 1000,
-              word_count: transcript.split(/\s+/).length,
+              duration_ms: durationMs,
+              word_count: words.length,
               language: "en",
               avg_confidence: 0.95,
             });
@@ -544,7 +555,15 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
   const handleSendTyped = (text: string) => {
     cancelSpeech();
-    submitTurn(text, "typed", null);
+    const trimmed = text.trim();
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    const estimatedDurationMs = Math.max(1000, Math.round((words.length / 135) * 60 * 1000));
+    submitTurn(trimmed, "typed", {
+      duration_ms: estimatedDurationMs,
+      word_count: words.length,
+      language: "en",
+      avg_confidence: null,
+    });
   };
 
   const handleMuteSpeaker = () => {
@@ -776,8 +795,6 @@ export const SessionView: React.FC<SessionViewProps> = ({
             <div className="relative flex items-center justify-center">
               <PushToTalkButton
                 state={state}
-                mode={mode}
-                onModeChange={setMode}
                 onStartRecording={handleStartRecording}
                 onStopRecording={handleStopRecording}
                 recordingSeconds={recordingSeconds}

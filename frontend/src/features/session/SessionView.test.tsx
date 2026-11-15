@@ -110,10 +110,6 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
       />,
     );
 
-    // Switch to Click to Toggle mode
-    const toggleModeBtn = screen.getByRole("button", { name: /click to toggle/i });
-    fireEvent.click(toggleModeBtn);
-
     // Click to start recording
     const pttButton = screen.getByRole("button", { name: /push to talk/i });
     fireEvent.click(pttButton);
@@ -177,7 +173,6 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
       screen.getByRole("button", { name: /toggle keyboard input/i }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /click to toggle/i }));
     fireEvent.click(screen.getByRole("button", { name: /push to talk/i }));
     fireEvent.click(screen.getByRole("button", { name: /stop recording/i }));
 
@@ -214,12 +209,6 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
       />,
     );
 
-    // Switch to toggle mode
-    const toggleModeBtn = screen.getByRole("button", { name: /click to toggle/i });
-    act(() => {
-      fireEvent.click(toggleModeBtn);
-    });
-
     // Start recording
     const pttButton = screen.getByRole("button", { name: /push to talk/i });
     act(() => {
@@ -253,9 +242,9 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
       />,
     );
 
-    // In default hold mode, pointerDown triggers start recording
+    // Click to start recording
     const pttButton = screen.getByRole("button", { name: /push to talk/i });
-    fireEvent.pointerDown(pttButton);
+    fireEvent.click(pttButton);
 
     // Verify explanation banner for mic denial
     await waitFor(() => {
@@ -341,7 +330,7 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
     });
 
     const pttButton = screen.getByRole("button", { name: /push to talk/i });
-    fireEvent.pointerDown(pttButton);
+    fireEvent.click(pttButton);
 
     expect(active.start).toHaveBeenCalled();
 
@@ -352,8 +341,9 @@ describe("SessionView - Push-To-Talk & Voice Interaction", () => {
       });
     });
 
-    // Release button to finish speaking
-    fireEvent.pointerUp(pttButton);
+    // Click button again to stop recording
+    const stopButton = screen.getByRole("button", { name: /stop recording/i });
+    fireEvent.click(stopButton);
 
     // Verifies review stage is reached using browser speech
     await waitFor(() => {

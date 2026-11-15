@@ -22,7 +22,7 @@ def build_coach_system_prompt() -> str:
     )
     result_shape = (
         '{"summary":"...",'
-        '"task_outcome":{"achieved":true,"explanation":"..."},'
+        '"task_outcome":{"achieved":"yes","explanation":"..."},'
         '"criteria":[{"criterion":"relevance","score":0,"rationale":"...",'
         '"evidence_turn_ids":["<candidate-turn-id>"]}, ... six objects total],'
         '"strengths":[{"text":"...","evidence_turn_ids":["<candidate-turn-id>"]}],'
@@ -36,9 +36,11 @@ def build_coach_system_prompt() -> str:
         "and odd spellings; judge composure from wording only, not voice tone. Score "
         "each criterion below with an integer from 0 to 10 and cite one or more "
         "candidate turn IDs as evidence. Give qualitative feedback and elaborate "
-        "most on the scenario evaluation-focus criteria. Return exactly one "
-        "criterion object for each, in this order: relevance, structure, clarity, "
-        "composure, conciseness, language_accuracy. Output only a JSON object "
+        "most on the scenario evaluation-focus criteria. Return exactly all six "
+        "criterion objects with unique, specific rationales based on the candidate's "
+        "actual answers in this order: relevance, structure, clarity, composure, "
+        "conciseness, language_accuracy. Never omit any criterion or provide generic "
+        "duplicate rationales across criteria. Output only a JSON object "
         "with exactly this structure: "
         f"{result_shape} Use one unique object for each rubric criterion, JSON integer "
         "scores from 0 to 10, and actual candidate turn IDs instead of the placeholder. "

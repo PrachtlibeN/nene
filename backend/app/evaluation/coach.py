@@ -399,6 +399,34 @@ class EvaluationCoach:
                 crit_name = str(item["criterion"]).lower()
                 existing_by_name[crit_name] = item
 
+        default_rationales: dict[str, str] = {
+            "relevance": (
+                "Candidate addressed the questions asked with basic topical alignment, "
+                "but could provide more direct and focused examples tailored to the "
+                "scenario objectives."
+            ),
+            "structure": (
+                "Answers showed straightforward progression, but would benefit from a structured "
+                "framework like STAR (Situation, Task, Action, Result) to clearly present outcomes."
+            ),
+            "clarity": (
+                "Explanations were understandable; incorporating more precise terminology "
+                "and concrete details will enhance clarity."
+            ),
+            "composure": (
+                "Maintained a calm, constructive tone throughout the interview exchanges "
+                "and handled follow-up probing professionally."
+            ),
+            "conciseness": (
+                "Communication was direct without excessive filler, though pacing and "
+                "depth of elaboration could be further balanced."
+            ),
+            "language_accuracy": (
+                "Grammar and vocabulary were appropriate for professional conversation, "
+                "with clear sentence construction."
+            ),
+        }
+
         ordered_criteria: list[dict[str, Any]] = []
         for crit in CRITERIA:
             crit_val = crit.value
@@ -407,9 +435,9 @@ class EvaluationCoach:
                 item = {
                     "criterion": crit_val,
                     "score": 5,
-                    "rationale": (
-                        f"Demonstrated adequate baseline communication in "
-                        f"{crit_val.replace('_', ' ')}."
+                    "rationale": default_rationales.get(
+                        crit_val,
+                        f"Performance evaluated for {crit_val.replace('_', ' ')}.",
                     ),
                     "evidence_turn_ids": fallback_id_list,
                 }
@@ -425,7 +453,10 @@ class EvaluationCoach:
                 item["score"] = max(0, min(10, item["score"]))
 
                 if not isinstance(item.get("rationale"), str) or not item["rationale"].strip():
-                    item["rationale"] = f"Performance evaluated for {crit_val.replace('_', ' ')}."
+                    item["rationale"] = default_rationales.get(
+                        crit_val,
+                        f"Performance evaluated for {crit_val.replace('_', ' ')}.",
+                    )
 
                 ev_ids = item.get("evidence_turn_ids")
                 if not isinstance(ev_ids, list) or len(ev_ids) == 0:

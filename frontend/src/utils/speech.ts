@@ -401,8 +401,31 @@ export function createSpeechRecognitionController(
   };
 }
 
+export function splitTextIntoSentences(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  const regex = /[^.!?\n]+(?:[.!?\n]+|$)/g;
+  const matches = trimmed.match(regex);
+  if (!matches) return [trimmed];
+  const sentences = matches.map((s) => s.trim()).filter((s) => s.length > 0);
+  return sentences.length > 0 ? sentences : [trimmed];
+}
+
 export function createSpeechSynthesisController(): SpeechSynthesisController {
   let activeSequenceId = 0;
+  let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+  let resumeInterval: ReturnType<typeof setInterval> | null = null;
+
+  const clearTimers = (): void => {
+    if (watchdogTimer) {
+      clearTimeout(watchdogTimer);
+      watchdogTimer = null;
+    }
+    if (resumeInterval) {
+      clearInterval(resumeInterval);
+      resumeInterval = null;
+    }
+  };
 
   const isSupported = (): boolean => {
     return (
@@ -414,6 +437,7 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
 
   const stop = (): void => {
     activeSequenceId += 1;
+    clearTimers();
     if (isSupported()) {
       try {
         window.speechSynthesis.cancel();
@@ -493,15 +517,15 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
     onItemStart?: (item: SpeechSequenceItem, index: number) => void,
     accent: EnglishAccent = "en-US",
   ): void => {
-    const sequence = items.filter((item) => item.text.trim().length > 0);
+    const validItems = items.filter((item) => item.text.trim().length > 0);
     if (!isSupported()) {
-      if (sequence.length > 0) {
-        onItemStart?.(sequence[sequence.length - 1], sequence.length - 1);
+      if (validItems.length > 0) {
+        onItemStart?.(validItems[validItems.length - 1], validItems.length - 1);
       }
       onEnd?.();
       return;
     }
-    if (sequence.length === 0) {
+    if (validItems.length === 0) {
       onEnd?.();
       return;
     }
@@ -509,40 +533,114 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
     try {
       activeSequenceId += 1;
       const sequenceId = activeSequenceId;
+      clearTimers();
       window.speechSynthesis.cancel();
-      let index = 0;
-      const speakNext = (): void => {
-        if (sequenceId !== activeSequenceId) return;
-        const item = sequence[index];
-        if (!item) {
+
+      // Split items into smaller sentence chunks to avoid browser synthesis speech dropouts
+      interface FlattenedChunk {
+        text: string;
+        item: SpeechSequenceItem;
+        isFirstChunkOfItem: boolean;
+        itemIndex: number;
+      }
+
+      const chunks: FlattenedChunk[] = [];
+      validItems.forEach((item, itemIdx) => {
+        const sentences = splitTextIntoSentences(item.text);
+        sentences.forEach((sentence, sIdx) => {
+          chunks.push({
+            text: sentence,
+            item,
+            isFirstChunkOfItem: sIdx === 0,
+            itemIndex: itemIdx,
+          });
+        });
+      });
+
+      if (chunks.length === 0) {
+        onEnd?.();
+        return;
+      }
+
+      // Keep synthesis alive across browsers (prevents Chrome 15s pause bug)
+      resumeInterval = setInterval(() => {
+        if (sequenceId !== activeSequenceId) {
+          if (resumeInterval) clearInterval(resumeInterval);
+          return;
+        }
+        try {
+          if (typeof window !== "undefined" && window.speechSynthesis) {
+            window.speechSynthesis.resume();
+          }
+        } catch {
+          // ignore resume error
+        }
+      }, 3000);
+
+      let chunkIndex = 0;
+      const speakNextChunk = (): void => {
+        if (sequenceId !== activeSequenceId) {
+          clearTimers();
+          return;
+        }
+
+        const currentChunk = chunks[chunkIndex];
+        if (!currentChunk) {
+          clearTimers();
           onEnd?.();
           return;
         }
 
-        onItemStart?.(item, index);
+        if (currentChunk.isFirstChunkOfItem) {
+          onItemStart?.(currentChunk.item, currentChunk.itemIndex);
+        }
 
-        const utterance = new window.SpeechSynthesisUtterance(item.text);
+        const utterance = new window.SpeechSynthesisUtterance(currentChunk.text);
         utterance.lang = accent;
         utterance.rate = 1.0;
-        const voice = voiceForGender(item.voiceGender, accent);
+        const voice = voiceForGender(currentChunk.item.voiceGender, accent);
         if (voice) utterance.voice = voice;
 
-        utterance.onend = () => {
+        let finished = false;
+        const handleDone = () => {
+          if (finished) return;
+          finished = true;
+          if (watchdogTimer) {
+            clearTimeout(watchdogTimer);
+            watchdogTimer = null;
+          }
           if (sequenceId !== activeSequenceId) return;
-          index += 1;
-          speakNext();
+          chunkIndex += 1;
+          speakNextChunk();
         };
-        utterance.onerror = () => {
-          if (sequenceId !== activeSequenceId) return;
-          index += 1;
-          speakNext();
-        };
+
+        // Watchdog timeout based on sentence length to prevent synthesis hangs
+        const estimatedMs = Math.max(
+          3000,
+          Math.min(15000, currentChunk.text.length * 90 + 2500),
+        );
+        watchdogTimer = setTimeout(() => {
+          try {
+            window.speechSynthesis.resume();
+          } catch {
+            // ignore
+          }
+          setTimeout(() => {
+            if (!finished && sequenceId === activeSequenceId) {
+              handleDone();
+            }
+          }, 400);
+        }, estimatedMs);
+
+        utterance.onend = handleDone;
+        utterance.onerror = handleDone;
 
         window.speechSynthesis.speak(utterance);
       };
 
-      speakNext();
+      speakNextChunk();
     } catch {
+      clearTimers();
       if (onError) onError();
       else onEnd?.();
     }

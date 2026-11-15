@@ -43,6 +43,11 @@ def compute_delivery_metrics(transcript: Sequence[TurnOut]) -> DeliveryMetrics:
             turn.speech_meta.duration_ms for turn in speech_turns if turn.speech_meta is not None
         )
         speech_word_count = sum(len(_words(turn.text)) for turn in speech_turns)
+        # Prevent 1s or 4s default artifacts when candidate spoke multiple words
+        if speaking_time_ms > 0 and speech_word_count > 0:
+            min_realistic_ms = int(speech_word_count * 250)
+            if speaking_time_ms < min_realistic_ms:
+                speaking_time_ms = int(speech_word_count * 450)
         words_per_minute = (
             round(speech_word_count * 60_000 / speaking_time_ms, 1)
             if speaking_time_ms > 0

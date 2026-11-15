@@ -45,7 +45,7 @@ export default function App() {
     <div className="min-h-screen min-h-[100dvh] bg-washi-100 bg-seigaiha text-sumi-900 flex flex-col antialiased selection:bg-ai-100 selection:text-ai-900">
       {/* Hide heavy Header/Nav when in Session View for full-screen immersive mobile experience */}
       {!isSessionView && (
-        <header className="border-b border-washi-300 bg-white/95 backdrop-blur-md sticky top-0 z-40 shadow-xs">
+        <header className="relative z-10 border-b border-washi-300 bg-white/95 backdrop-blur-md shadow-xs">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-3 py-2.5 sm:px-6">
             {/* Brand Logo with Red Hanko Stamp */}
             <div className="flex items-center gap-2.5">

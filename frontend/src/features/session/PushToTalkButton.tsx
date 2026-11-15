@@ -4,8 +4,8 @@ import type { InteractionMode, PushToTalkState } from "./types";
 
 interface PushToTalkButtonProps {
   state: PushToTalkState;
-  mode: InteractionMode;
-  onModeChange: (mode: InteractionMode) => void;
+  mode?: InteractionMode;
+  onModeChange?: (mode: InteractionMode) => void;
   onStartRecording: () => void;
   onStopRecording: () => void;
   recordingSeconds: number;
@@ -20,8 +20,6 @@ interface PushToTalkButtonProps {
 
 export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
   state,
-  mode,
-  onModeChange,
   onStartRecording,
   onStopRecording,
   recordingSeconds,
@@ -30,7 +28,6 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
   isServerSttUnavailable,
   isBrowserSpeechSupported,
   onMuteSpeaker,
-  volume = 0,
   interimTranscript = "",
 }) => {
   const isRecording = state === "recording";
@@ -50,92 +47,20 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
     };
   }, []);
 
-  const handlePointerDown = (e: React.PointerEvent) => {
+  const handleClick = (e: React.MouseEvent) => {
     if (isButtonDisabled) return;
-    if (mode === "hold" && state === "idle") {
-      e.preventDefault();
+    e.preventDefault();
+    if (isRecording) {
+      onStopRecording();
+    } else if (state === "idle") {
       onStartRecording();
     }
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (mode === "hold" && isRecording) {
-      e.preventDefault();
-      onStopRecording();
-    }
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    if (isButtonDisabled) return;
-    if (mode === "toggle") {
-      e.preventDefault();
-      if (isRecording) {
-        onStopRecording();
-      } else if (state === "idle") {
-        onStartRecording();
-      }
-    }
-  };
-
-  // Wave ripple scale based on real-time voice volume
-  const waveScale = 1 + Math.min(1.2, volume * 1.5);
-
   return (
     <div className="flex flex-col items-center gap-2">
-      {/* Interaction Mode Switch (Press & Hold vs Click to Toggle) */}
-      <div className="flex items-center gap-2 text-xs text-sumi-600">
-        <span className="font-medium text-[11px] uppercase tracking-wider text-sumi-400">
-          Input Mode:
-        </span>
-        <div className="inline-flex rounded-lg border border-washi-300 bg-washi-200/80 p-0.5 shadow-inner">
-          <button
-            type="button"
-            onClick={() => onModeChange("hold")}
-            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-all ${
-              mode === "hold"
-                ? "bg-white text-ai-700 shadow-sm"
-                : "text-sumi-600 hover:text-sumi-900"
-            }`}
-          >
-            Press &amp; Hold
-          </button>
-          <button
-            type="button"
-            onClick={() => onModeChange("toggle")}
-            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-all ${
-              mode === "toggle"
-                ? "bg-white text-ai-700 shadow-sm"
-                : "text-sumi-600 hover:text-sumi-900"
-            }`}
-          >
-            Click to Toggle
-          </button>
-        </div>
-      </div>
-
-      {/* Main Push-To-Talk Button with Concentric Hamon Ripples */}
+      {/* Main Push-To-Talk Button: Fixed Click-to-Toggle with Smooth Color Transition */}
       <div className="relative flex flex-col items-center justify-center my-1">
-        {/* Dynamic Hamon Waves when Recording */}
-        {isRecording && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            {/* Outer dynamic volume wave */}
-            <div
-              className="absolute h-24 w-24 rounded-full border-2 border-shu-500 opacity-60 transition-transform duration-75 ease-out"
-              style={{ transform: `scale(${waveScale * 1.35})` }}
-            />
-            {/* Middle pulsating wave */}
-            <div
-              className="absolute h-24 w-24 rounded-full bg-shu-400 opacity-25 animate-ping"
-              style={{ animationDuration: "1.5s" }}
-            />
-            {/* Inner dynamic volume wave */}
-            <div
-              className="absolute h-22 w-22 rounded-full border border-yamabuki-500 opacity-50 transition-transform duration-100 ease-out"
-              style={{ transform: `scale(${waveScale * 1.15})` }}
-            />
-          </div>
-        )}
-
         <button
           type="button"
           disabled={isButtonDisabled}
@@ -146,21 +71,19 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
                 ? "Microphone locked"
                 : "Push to talk"
           }
-          onPointerDown={handlePointerDown}
-          onPointerUp={handlePointerUp}
           onClick={handleClick}
-          className={`relative z-10 flex h-20 w-20 sm:h-22 sm:w-22 items-center justify-center rounded-full shadow-lg transition-all transform focus:outline-none select-none ${
+          className={`relative z-10 flex h-20 w-20 sm:h-22 sm:w-22 items-center justify-center rounded-full focus:outline-none select-none transition-colors duration-200 ${
             isButtonDisabled
               ? "bg-washi-300 text-sumi-400 cursor-not-allowed opacity-60 border border-washi-400"
               : isRecording
-                ? "bg-gradient-to-tr from-shu-700 to-shu-500 text-white scale-105 shadow-shu-600/40 ring-4 ring-shu-200"
-                : "bg-gradient-to-tr from-ai-800 to-ai-600 text-white hover:from-ai-700 hover:to-ai-500 active:scale-95 shadow-ai-700/30 hover:shadow-xl ring-2 ring-white"
+                ? "bg-gradient-to-tr from-shu-700 to-shu-600 text-white shadow-lg shadow-shu-600/30 ring-4 ring-shu-200 ring-offset-2"
+                : "bg-gradient-to-tr from-ai-800 to-ai-600 text-white hover:from-ai-700 hover:to-ai-500 shadow-md shadow-ai-700/20 ring-2 ring-white"
           }`}
         >
           {isRecording ? (
             /* Recording active stop square */
             <svg
-              className="h-8 w-8 text-white animate-pulse"
+              className="h-8 w-8 text-white"
               fill="currentColor"
               viewBox="0 0 24 24"
             >
@@ -203,15 +126,15 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
         <div className="mt-2 text-center text-xs">
           {isRecording ? (
             <div className="flex flex-col items-center text-shu-600 font-semibold">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-shu-600 animate-ping" />
-                Recording ({recordingSeconds}s / {maxAudioSeconds}s)
+              <span className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <span className="h-2.5 w-2.5 rounded-full bg-shu-600 animate-pulse" />
+                Listening... Tap to stop &amp; send
               </span>
               <span className="text-[11px] font-normal text-shu-700 mt-0.5">
-                {mode === "hold" ? "Release to transcribe" : "Click to stop & transcribe"}
+                Recording: {recordingSeconds}s / {maxAudioSeconds}s
               </span>
               {interimTranscript ? (
-                <div className="mt-1.5 max-w-xs sm:max-w-md px-3 py-1 rounded-full bg-shu-50/90 border border-shu-200 text-[11px] sm:text-xs text-shu-800 italic truncate shadow-2xs animate-pulse">
+                <div className="mt-1.5 max-w-xs sm:max-w-md px-3 py-1 rounded-full bg-shu-50/90 border border-shu-200 text-[11px] sm:text-xs text-shu-800 italic truncate shadow-2xs">
                   &ldquo;{interimTranscript}&rdquo;
                 </div>
               ) : null}
@@ -258,9 +181,7 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
           ) : isServerSttUnavailable ? (
             <div className="flex flex-col items-center">
               <span className="text-sumi-600 font-medium">
-                {mode === "hold"
-                  ? "Hold button to speak (Browser Speech)"
-                  : "Click button to speak (Browser Speech)"}
+                Tap to speak (Browser Speech)
               </span>
               <span className="text-[10px] font-bold text-ai-700 bg-ai-100 px-2 py-0.5 rounded-full mt-0.5 border border-ai-200">
                 Web Speech API
@@ -268,7 +189,7 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
             </div>
           ) : (
             <span className="text-sumi-500 font-medium">
-              {mode === "hold" ? "Hold button to speak" : "Click button to start recording"}
+              Tap to speak
             </span>
           )}
         </div>

@@ -5,6 +5,7 @@ import {
   createSpeechRecognitionController,
   createSpeechSynthesisController,
   getSupportedAudioMimeType,
+  splitTextIntoSentences,
   stopAllSpeech,
   type BrowserSpeechRecognitionErrorEvent,
   type BrowserSpeechRecognitionEvent,
@@ -85,6 +86,29 @@ describe("cleanSpeakerTag", () => {
     expect(cleanSpeakerTag("Regular dialogue without prefix.")).toBe(
       "Regular dialogue without prefix.",
     );
+  });
+});
+
+describe("splitTextIntoSentences", () => {
+  it("splits multi-sentence text into individual trimmed sentences", () => {
+    const input = "Hello world! How are you doing today? I am doing great. Let's start.";
+    expect(splitTextIntoSentences(input)).toEqual([
+      "Hello world!",
+      "How are you doing today?",
+      "I am doing great.",
+      "Let's start.",
+    ]);
+  });
+
+  it("handles text with newlines and single sentences", () => {
+    expect(splitTextIntoSentences("First line.\nSecond line.")).toEqual([
+      "First line.",
+      "Second line.",
+    ]);
+    expect(splitTextIntoSentences("Just one sentence without end punctuation")).toEqual([
+      "Just one sentence without end punctuation",
+    ]);
+    expect(splitTextIntoSentences("")).toEqual([]);
   });
 });
 

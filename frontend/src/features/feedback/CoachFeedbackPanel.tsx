@@ -168,20 +168,6 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
                 <p className="text-xs text-sumi-600 leading-relaxed">
                   {item.rationale}
                 </p>
-
-                {item.evidence_turn_ids.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px] text-sumi-400">
-                    <span>Evidence:</span>
-                    {item.evidence_turn_ids.map((id) => (
-                      <span
-                        key={id}
-                        className="rounded bg-washi-200 px-1.5 py-0.5 font-mono text-[10px] text-sumi-700 border border-washi-300"
-                      >
-                        {id}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -202,16 +188,6 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
                 className="rounded-xl border border-matcha-200 bg-matcha-50/70 p-3.5 text-xs text-sumi-900"
               >
                 <p className="font-medium leading-relaxed">{strength.text}</p>
-                {strength.evidence_turn_ids.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1 text-[10px] text-matcha-700">
-                    <span>Turns:</span>
-                    {strength.evidence_turn_ids.map((id) => (
-                      <span key={id} className="font-mono underline">
-                        {id}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </li>
             ))}
           </ul>
@@ -237,16 +213,6 @@ export const CoachFeedbackPanel: React.FC<CoachFeedbackPanelProps> = ({
                     <span className="italic">
                       &ldquo;{improvement.example_rewrite}&rdquo;
                     </span>
-                  </div>
-                )}
-                {improvement.evidence_turn_ids.length > 0 && (
-                  <div className="flex flex-wrap gap-1 text-[10px] text-yamabuki-700">
-                    <span>Turns:</span>
-                    {improvement.evidence_turn_ids.map((id) => (
-                      <span key={id} className="font-mono underline">
-                        {id}
-                      </span>
-                    ))}
                   </div>
                 )}
               </li>
