@@ -4,9 +4,11 @@ import {
   cleanSpeakerTag,
   createSpeechRecognitionController,
   createSpeechSynthesisController,
+  ensureVoicesLoaded,
   getSupportedAudioMimeType,
   splitTextIntoSentences,
   stopAllSpeech,
+  unlockSpeechAudio,
   type BrowserSpeechRecognitionErrorEvent,
   type BrowserSpeechRecognitionEvent,
   type BrowserSpeechRecognitionInstance,
@@ -17,7 +19,7 @@ afterEach(() => {
 });
 
 describe("SpeechSynthesisController", () => {
-  it("queues panel turns and selects distinct gender-matched voices", () => {
+  it("queues panel turns and selects distinct gender-matched voices", async () => {
     const maleVoice = {
       name: "Microsoft David",
       lang: "en-US",
@@ -44,18 +46,32 @@ describe("SpeechSynthesisController", () => {
       onEnd,
     );
 
-    expect(utterances).toHaveLength(1);
+    // Wait 60ms delay after cancel() for speech to start
+    await vi.waitFor(() => expect(utterances).toHaveLength(1));
     expect(utterances[0]?.text).toBe("First panel turn");
     expect(utterances[0]?.voice).toBe(maleVoice);
 
     utterances[0]?.onend?.(new Event("end") as SpeechSynthesisEvent);
 
-    expect(utterances).toHaveLength(2);
+    await vi.waitFor(() => expect(utterances).toHaveLength(2));
     expect(utterances[1]?.text).toBe("Second panel turn");
     expect(utterances[1]?.voice).toBe(femaleVoice);
 
     utterances[1]?.onend?.(new Event("end") as SpeechSynthesisEvent);
     expect(onEnd).toHaveBeenCalledOnce();
+  });
+
+  it("unlockSpeechAudio dispatches a silent utterance to unlock audio", () => {
+    const speakSpy = vi.spyOn(window.speechSynthesis, "speak").mockImplementation(() => {});
+    unlockSpeechAudio();
+    expect(speakSpy).toHaveBeenCalled();
+  });
+
+  it("ensureVoicesLoaded resolves loaded voices or fallback", async () => {
+    const mockVoice = { name: "Google US English", lang: "en-US" } as SpeechSynthesisVoice;
+    vi.spyOn(window.speechSynthesis, "getVoices").mockReturnValue([mockVoice]);
+    const voices = await ensureVoicesLoaded(50);
+    expect(voices).toEqual([mockVoice]);
   });
 });
 

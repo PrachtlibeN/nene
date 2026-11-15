@@ -271,11 +271,15 @@ body {
 }
 
 .animate-blink-a {
+  transform-box: fill-box;
+  transform-origin: center;
   animation: eye-blink-a 3.6s infinite ease-in-out;
   animation-delay: -0.8s;
 }
 
 .animate-blink-b {
+  transform-box: fill-box;
+  transform-origin: center;
   animation: eye-blink-b 4.4s infinite ease-in-out;
   animation-delay: -2.3s;
 }
@@ -326,6 +330,8 @@ body {
 }
 
 .animate-gentle-nod {
+  transform-box: fill-box;
+  transform-origin: center;
   animation: gentle-nod 6.2s ease-in-out infinite;
 }
 

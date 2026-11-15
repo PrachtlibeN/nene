@@ -401,6 +401,87 @@ export function createSpeechRecognitionController(
   };
 }
 
+let audioUnlocked = false;
+
+/**
+ * Plays a silent (volume=0) utterance on user gesture to permanently unlock
+ * speech synthesis audio in browsers with strict autoplay policies (iOS/Safari/Chrome).
+ */
+export function unlockSpeechAudio(): void {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  if (audioUnlocked) return;
+  try {
+    const utterance = new window.SpeechSynthesisUtterance("");
+    utterance.volume = 0;
+    utterance.rate = 10;
+    utterance.onend = () => {
+      audioUnlocked = true;
+    };
+    utterance.onerror = () => {
+      audioUnlocked = true;
+    };
+    window.speechSynthesis.speak(utterance);
+    audioUnlocked = true;
+  } catch {
+    // ignore
+  }
+}
+
+let voicesLoadedPromise: Promise<SpeechSynthesisVoice[]> | null = null;
+
+/**
+ * Resolves available SpeechSynthesis voices, handling asynchronous onvoiceschanged
+ * across browsers (e.g. Chrome/Safari lazy voice loading) with a fallback timeout (default 300ms).
+ */
+export function ensureVoicesLoaded(timeoutMs = 300): Promise<SpeechSynthesisVoice[]> {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    return Promise.resolve([]);
+  }
+  const current = window.speechSynthesis.getVoices();
+  if (current && current.length > 0) {
+    return Promise.resolve(current);
+  }
+  if (voicesLoadedPromise) {
+    return voicesLoadedPromise;
+  }
+
+  voicesLoadedPromise = new Promise<SpeechSynthesisVoice[]>((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(window.speechSynthesis.getVoices() || []);
+      }
+    }, timeoutMs);
+
+    const onVoicesChanged = () => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        if (window.speechSynthesis.removeEventListener) {
+          window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
+        } else if ("onvoiceschanged" in window.speechSynthesis) {
+          window.speechSynthesis.onvoiceschanged = null;
+        }
+        resolve(window.speechSynthesis.getVoices() || []);
+      }
+    };
+
+    if (window.speechSynthesis.addEventListener) {
+      window.speechSynthesis.addEventListener("voiceschanged", onVoicesChanged);
+    } else if ("onvoiceschanged" in window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = onVoicesChanged;
+    }
+  });
+
+  return voicesLoadedPromise;
+}
+
+// Auto-trigger voice loading eagerly
+if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  ensureVoicesLoaded(300).catch(() => {});
+}
+
 export function splitTextIntoSentences(text: string): string[] {
   const trimmed = text.trim();
   if (!trimmed) return [];
@@ -413,10 +494,15 @@ export function splitTextIntoSentences(text: string): string[] {
 
 export function createSpeechSynthesisController(): SpeechSynthesisController {
   let activeSequenceId = 0;
+  let cancelGraceTimer: ReturnType<typeof setTimeout> | null = null;
   let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
   let resumeInterval: ReturnType<typeof setInterval> | null = null;
 
   const clearTimers = (): void => {
+    if (cancelGraceTimer) {
+      clearTimeout(cancelGraceTimer);
+      cancelGraceTimer = null;
+    }
     if (watchdogTimer) {
       clearTimeout(watchdogTimer);
       watchdogTimer = null;
@@ -638,7 +724,12 @@ export function createSpeechSynthesisController(): SpeechSynthesisController {
         window.speechSynthesis.speak(utterance);
       };
 
-      speakNextChunk();
+      // Delay 60ms after cancel() to prevent Chromium cancel() from swallowing subsequent speak()
+      cancelGraceTimer = setTimeout(() => {
+        cancelGraceTimer = null;
+        if (sequenceId !== activeSequenceId) return;
+        speakNextChunk();
+      }, 60);
     } catch {
       clearTimers();
       if (onError) onError();

@@ -272,7 +272,8 @@ const StageCharacterComponent: React.FC<StageCharacterProps> = ({
             id="head"
             className={expression === "listening" ? "animate-gentle-nod" : undefined}
             style={{
-              transformOrigin: "100px 120px",
+              transformBox: "fill-box",
+              transformOrigin: "center",
               transform: headTransform,
               transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
             }}
@@ -337,7 +338,8 @@ const StageCharacterComponent: React.FC<StageCharacterProps> = ({
                 strokeLinecap="round"
                 fill="none"
                 style={{
-                  transformOrigin: "85px 97px",
+                  transformBox: "fill-box",
+                  transformOrigin: "center",
                   transform: leftEyebrowTransform,
                   transition: "transform 250ms cubic-bezier(0.22, 1, 0.36, 1)",
                 }}
@@ -350,7 +352,8 @@ const StageCharacterComponent: React.FC<StageCharacterProps> = ({
                 strokeLinecap="round"
                 fill="none"
                 style={{
-                  transformOrigin: "115px 97px",
+                  transformBox: "fill-box",
+                  transformOrigin: "center",
                   transform: rightEyebrowTransform,
                   transition: "transform 250ms cubic-bezier(0.22, 1, 0.36, 1)",
                 }}
@@ -361,7 +364,7 @@ const StageCharacterComponent: React.FC<StageCharacterProps> = ({
             <g
               id="eyes"
               className={panelIndex === 0 ? "animate-blink-a" : "animate-blink-b"}
-              style={{ transformOrigin: "100px 108px" }}
+              style={{ transformBox: "fill-box", transformOrigin: "center" }}
             >
               {/* Normal Eyes (Round Pupils) */}
               <g
@@ -422,19 +425,21 @@ const StageCharacterComponent: React.FC<StageCharacterProps> = ({
             />
 
             {/* Dynamic Mouth Group */}
-            <g id="mouth" style={{ transformOrigin: "100px 138px" }}>
+            <g id="mouth" style={{ transformBox: "fill-box", transformOrigin: "center" }}>
               {mouthOpenAmount > 0.08 ? (
-                /* Speaking open mouth (Volume-reactive with smooth scaleY transition) */
+                /* Speaking open mouth (Volume-reactive with smooth scaleY transition, bounded 0.25..1.15) */
                 <ellipse
                   cx="100"
                   cy="138"
-                  rx={4 + mouthOpenAmount * 4}
-                  ry={2 + mouthOpenAmount * 5}
+                  rx={4 + mouthOpenAmount * 3.5}
+                  ry={2 + mouthOpenAmount * 3.5}
                   fill="#9B2C2C"
                   stroke="#742A2A"
                   strokeWidth="1"
                   style={{
-                    transform: `scaleY(${0.8 + mouthOpenAmount * 0.4})`,
+                    transformBox: "fill-box",
+                    transformOrigin: "center",
+                    transform: `scaleY(${Math.max(0.25, Math.min(1.15, 0.65 + mouthOpenAmount * 0.45))})`,
                     transition: "transform 100ms cubic-bezier(0.22, 1, 0.36, 1)",
                   }}
                 />
@@ -446,6 +451,7 @@ const StageCharacterComponent: React.FC<StageCharacterProps> = ({
                   strokeWidth="1.8"
                   fill="none"
                   strokeLinecap="round"
+                  style={{ transformBox: "fill-box", transformOrigin: "center" }}
                 />
               ) : expression === "encouraging" ? (
                 /* Warm open smile */
@@ -455,6 +461,7 @@ const StageCharacterComponent: React.FC<StageCharacterProps> = ({
                   strokeWidth="2"
                   fill="#9B2C2C"
                   strokeLinecap="round"
+                  style={{ transformBox: "fill-box", transformOrigin: "center" }}
                 />
               ) : expression === "listening" ? (
                 /* Gentle friendly listening smile */
@@ -464,6 +471,7 @@ const StageCharacterComponent: React.FC<StageCharacterProps> = ({
                   strokeWidth="1.8"
                   fill="none"
                   strokeLinecap="round"
+                  style={{ transformBox: "fill-box", transformOrigin: "center" }}
                 />
               ) : (
                 /* Idle resting smile */
@@ -473,6 +481,7 @@ const StageCharacterComponent: React.FC<StageCharacterProps> = ({
                   strokeWidth="1.8"
                   fill="none"
                   strokeLinecap="round"
+                  style={{ transformBox: "fill-box", transformOrigin: "center" }}
                 />
               )}
             </g>

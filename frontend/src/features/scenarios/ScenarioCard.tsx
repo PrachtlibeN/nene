@@ -7,6 +7,16 @@ interface ScenarioCardProps {
   onQuickStart: (scenarioId: string) => void;
 }
 
+const getScenarioSkills = (slug: string): string[] => {
+  if (slug.includes("customer") || slug.includes("escalation")) {
+    return ["De-escalation", "Active Listening", "Crisis Resolution"];
+  }
+  if (slug.includes("pitch") || slug.includes("project")) {
+    return ["Executive Presence", "ROI & Vision", "Strategic Clarity"];
+  }
+  return ["STAR Method", "Decision-making", "Conflict Resolution"];
+};
+
 export const ScenarioCard: React.FC<ScenarioCardProps> = ({
   scenario,
   onSelect,
@@ -41,6 +51,8 @@ export const ScenarioCard: React.FC<ScenarioCardProps> = ({
     }
   };
 
+  const focusSkills = getScenarioSkills(scenario.slug);
+
   return (
     <div className="scenario-card-hover group relative flex flex-col justify-between rounded-2xl border-2 border-washi-300 bg-washi-50 p-5 shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-ai-600 focus-within:ring-offset-2">
       <div>
@@ -62,8 +74,8 @@ export const ScenarioCard: React.FC<ScenarioCardProps> = ({
           <div className="absolute bottom-2 left-2 z-10">
             {difficultyBadge(scenario.difficulty)}
           </div>
-          <div className="absolute bottom-2 right-2 z-10 bg-sumi-900/75 backdrop-blur-sm text-white px-2 py-0.5 rounded text-[11px] font-medium shadow-sm">
-            {scenario.estimated_minutes}m &bull; {scenario.max_turns} turns
+          <div className="absolute bottom-2 right-2 z-10 bg-sumi-900/80 backdrop-blur-sm text-white px-2 py-0.5 rounded text-[11px] font-semibold shadow-sm">
+            10 Turns &bull; {scenario.estimated_minutes}m
           </div>
         </div>
 
@@ -75,9 +87,21 @@ export const ScenarioCard: React.FC<ScenarioCardProps> = ({
           {scenario.description}
         </p>
 
-        {/* AI Panel Information */}
+        {/* Focus Skills Tags */}
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {focusSkills.map((skill) => (
+            <span
+              key={skill}
+              className="inline-flex items-center rounded-md bg-white border border-washi-300 px-2 py-0.5 text-[10px] font-semibold text-sumi-700 shadow-3xs"
+            >
+              {skill}
+            </span>
+          ))}
+        </div>
+
+        {/* AI Panel Information with Avatars */}
         {scenario.personas?.length === 2 && (
-          <div className="mt-4 rounded-xl border border-ai-100 bg-ai-50/60 p-3 space-y-2">
+          <div className="mt-3.5 rounded-xl border border-ai-100 bg-ai-50/70 p-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1 rounded-full bg-ai-700 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-xs">
                 2-on-1 Panel
@@ -86,13 +110,24 @@ export const ScenarioCard: React.FC<ScenarioCardProps> = ({
                 Dual AI Interviewers
               </span>
             </div>
-            <div className="space-y-1 pt-1">
+            <div className="space-y-1.5 pt-1">
               {scenario.personas.map((persona, index) => (
-                <div key={persona.id} className="text-xs text-sumi-700 flex items-center justify-between">
-                  <span className="font-semibold text-sumi-900">
-                    AI #{index + 1}: {persona.name}
-                  </span>
-                  <span className="text-[11px] text-sumi-500 font-normal truncate max-w-[140px]">
+                <div key={persona.id} className="text-xs text-sumi-700 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={`inline-flex items-center justify-center h-4.5 w-4.5 rounded-full text-[10px] font-bold shrink-0 ${
+                        persona.voice_gender === "female"
+                          ? "bg-shu-100 text-shu-800 border border-shu-300"
+                          : "bg-ai-100 text-ai-800 border border-ai-300"
+                      }`}
+                    >
+                      {persona.name.charAt(0)}
+                    </span>
+                    <span className="font-semibold text-sumi-900 truncate">
+                      AI #{index + 1}: {persona.name}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-sumi-500 font-normal truncate max-w-[130px]">
                     {persona.role_title}
                   </span>
                 </div>

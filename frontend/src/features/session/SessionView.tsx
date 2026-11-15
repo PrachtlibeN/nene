@@ -16,6 +16,7 @@ import {
   getSupportedAudioMimeType,
   isSpeechRecognitionSupported,
   stopAllSpeech,
+  unlockSpeechAudio,
   type EnglishAccent,
   type SpeechRecognitionController,
   type SpeechSequenceItem,
@@ -118,6 +119,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   // Fetch speech status and health on mount to detect server STT readiness immediately
   useEffect(() => {
     let mounted = true;
+    unlockSpeechAudio();
     Promise.allSettled([api.getSpeechStatus(), api.getHealth()])
       .then(([speechResult, healthResult]) => {
         if (!mounted) return;
@@ -219,6 +221,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
   // Push-to-talk: Start recording
   const handleStartRecording = async () => {
+    unlockSpeechAudio();
     cancelSpeech();
     speechRef.current.stop();
     setActiveSpeakingTurn(null);
@@ -554,6 +557,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   };
 
   const handleSendTyped = (text: string) => {
+    unlockSpeechAudio();
     cancelSpeech();
     const trimmed = text.trim();
     const words = trimmed.split(/\s+/).filter(Boolean);
@@ -574,6 +578,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
   };
 
   const handleReplayTurn = (text: string, speakerId?: string) => {
+    unlockSpeechAudio();
     cancelSpeech();
     speechRef.current.stop();
     setState("speaking");
